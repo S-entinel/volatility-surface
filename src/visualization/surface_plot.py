@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import griddata
 import plotly.graph_objects as go
-from typing import List, Tuple
+from typing import List, Tuple, Literal
 from dataclasses import dataclass
 
 @dataclass
@@ -10,88 +10,120 @@ class SurfaceData:
     expiries: np.ndarray
     ivs: np.ndarray
     spot_price: float
+    y_axis_type: Literal['Strike', 'Moneyness'] = 'Strike'
 
 class SurfacePlotter:
     def __init__(self, surface_data: SurfaceData):
         self.data = surface_data
         self._prepare_mesh()
-    
+
     def _prepare_mesh(self):
         """Create interpolated mesh for surface plotting"""
-        self.strike_mesh, self.expiry_mesh = np.meshgrid(
-            np.linspace(self.data.strikes.min(), self.data.strikes.max(), 100),
-            np.linspace(self.data.expiries.min(), self.data.expiries.max(), 100)
+        # Create mesh grid similar to the reference implementation
+        self.expiry_mesh, self.strike_mesh = np.meshgrid(
+            np.linspace(self.data.expiries.min(), self.data.expiries.max(), 50),
+            np.linspace(self.data.strikes.min(), self.data.strikes.max(), 50)
         )
         
-        points = np.column_stack((self.data.strikes, self.data.expiries))
+        # Use linear interpolation as in the reference
         self.vol_mesh = griddata(
-            points, self.data.ivs,
-            (self.strike_mesh, self.expiry_mesh),
-            method='cubic',
-            fill_value=np.nan
+            (self.data.expiries, self.data.strikes),
+            self.data.ivs,
+            (self.expiry_mesh, self.strike_mesh),
+            method='linear'
         )
+        
+        # Mask NaN values
+        self.vol_mesh = np.ma.array(self.vol_mesh, mask=np.isnan(self.vol_mesh))
     
     def create_surface_plot(self) -> go.Figure:
         """Generate interactive 3D surface plot"""
         fig = go.Figure(data=[
             go.Surface(
-                x=self.strike_mesh/self.data.spot_price,  # Normalize strikes
-                y=self.expiry_mesh * 365,  # Convert to days
+                x=self.expiry_mesh,
+                y=self.strike_mesh,
                 z=self.vol_mesh * 100,  # Convert to percentage
-                coloraxis='coloraxis',
-                name='Surface'  # Add name for surface
+                colorscale='Viridis',  # Use Viridis colorscale like the reference
+                lighting=dict(
+                    ambient=0.8,
+                    diffuse=0.9,
+                    fresnel=0.2,
+                    specular=0.1,
+                    roughness=0.9
+                ),
+                colorbar=dict(
+                    title='Implied Volatility (%)',
+                    titleside='right',
+                    x=1.02,
+                    thickness=20,
+                    len=0.85,
+                    tickformat='.0f'
+                ),
+                contours=dict(
+                    x=dict(show=True, color='rgb(200,200,200)', width=1),
+                    y=dict(show=True, color='rgb(200,200,200)', width=1),
+                    z=dict(show=True, color='rgb(200,200,200)', width=1)
+                )
             )
         ])
-        
+
+        # Update layout to match reference
         fig.update_layout(
-            title='SPY Implied Volatility Surface',
             scene=dict(
-                xaxis_title='Moneyness (Strike/Spot)',
-                yaxis_title='Days to Expiry',
-                zaxis_title='IV (%)',
+                xaxis_title='Time to Expiration (years)',
+                yaxis_title='Strike Price ($)' if self.data.y_axis_type == 'Strike' else 'Moneyness (Strike/Spot)',
+                zaxis_title='Implied Volatility (%)',
                 camera=dict(
-                    eye=dict(x=1.5, y=1.5, z=1.2)
+                    up=dict(x=0, y=0, z=1),
+                    center=dict(x=0, y=0, z=-0.2),
+                    eye=dict(x=1.5, y=-1.5, z=1.2)
+                ),
+                aspectratio=dict(x=1.2, y=1.2, z=0.8),
+                xaxis=dict(
+                    gridcolor='rgb(230,230,230)',
+                    showbackground=True,
+                    backgroundcolor='white'
+                ),
+                yaxis=dict(
+                    gridcolor='rgb(230,230,230)',
+                    showbackground=True,
+                    backgroundcolor='white'
+                ),
+                zaxis=dict(
+                    gridcolor='rgb(230,230,230)',
+                    showbackground=True,
+                    backgroundcolor='white'
                 )
             ),
-            coloraxis=dict(
-                colorscale='RdYlBu_r',
-                colorbar=dict(
-                    title='IV (%)',
-                    x=1.1,  # Move colorbar more to the right
-                    y=0.5   # Center vertically
-                )
-            ),
-            # Add legend for smile curves
-            showlegend=True,
-            legend=dict(
-                x=1.2,     # Position legend to the right of colorbar
-                y=0.9,     # Position near the top
-                xanchor='left',
-                yanchor='top'
-            ),
-            width=1200,    # Increase width to accommodate legends
+            width=900,
             height=800,
-            margin=dict(r=150)  # Add right margin for legends
+            margin=dict(l=65, r=50, b=65, t=90),
+            showlegend=False,
+            paper_bgcolor='white',
+            plot_bgcolor='white'
         )
-        
+
         return fig
 
-    def add_smile_slices(self, fig: go.Figure, expiry_days: List[int] = [30, 90, 180]) -> go.Figure:
+    def add_smile_slices(self, fig: go.Figure, expiry_days: List[int] = None) -> go.Figure:
         """Add volatility smile curves for specific expiries"""
-        colors = ['black', 'darkblue', 'darkred']  # Different colors for each slice
+        if expiry_days is None:
+            expiry_days = [30, 60, 90]
+
+        colors = ['rgba(255,255,255,0.8)'] * len(expiry_days)
         
         for days, color in zip(expiry_days, colors):
             expiry_year = days/365
-            # Find nearest expiry in our data
             idx = np.abs(self.expiry_mesh[0] - expiry_year).argmin()
             
             fig.add_trace(
                 go.Scatter3d(
-                    x=self.strike_mesh[idx]/self.data.spot_price,
-                    y=[days] * len(self.strike_mesh[idx]),
+                    x=self.expiry_mesh[idx],
+                    y=self.strike_mesh[idx],
                     z=self.vol_mesh[idx] * 100,
-                    name=f'{days}d Smile',
-                    line=dict(color=color, width=4)
+                    mode='lines',
+                    line=dict(color=color, width=2),
+                    showlegend=False
                 )
             )
         
