@@ -59,6 +59,15 @@ def main():
     
     # Sidebar
     with st.sidebar:
+        # Theme Selection (New!)
+        theme = st.selectbox(
+            "Choose Theme",
+            options=["Dark", "Light"],
+            index=0,  # Default to Dark theme
+        )
+        
+        st.markdown("---")  # Separator
+        
         st.header("Model Parameters")
         st.markdown("Adjust the parameters for the Black-Scholes model.")
         
@@ -183,7 +192,8 @@ def main():
             
             # Create and display plot
             plotter = SurfacePlotter(surface_data)
-            fig = plotter.create_surface_plot()
+            fig = plotter.create_surface_plot(theme=theme.lower())
+            fig = plotter.add_smile_slices(fig, theme=theme.lower())
             
             status_placeholder.empty()
             st.plotly_chart(fig, use_container_width=True)

@@ -33,11 +33,17 @@ class SurfacePlotter:
         
         self.vol_mesh = np.ma.array(self.vol_mesh, mask=np.isnan(self.vol_mesh))
     
-    def create_surface_plot(self) -> go.Figure:
-        """Generate interactive 3D surface plot"""
-        # Using "hot" colorscale
+    def create_surface_plot(self, theme: str = 'dark') -> go.Figure:
+        """Generate interactive 3D surface plot with theme support"""
+        # Theme-dependent colors
+        is_dark = theme.lower() == 'dark'
+        text_color = 'white' if is_dark else 'black'
+        bg_color = 'rgb(0, 0, 0)' if is_dark else 'white'
+        grid_color = 'rgba(255, 255, 255, 0.2)' if is_dark else 'rgb(180, 180, 180)'
+        
+        # Hot colorscale
         hot_colorscale = [
-            [0.0, 'rgb(0,0,0)'],      # Black
+            [0.0, 'rgb(0,0,0)' if is_dark else 'rgb(255,255,255)'],
             [0.25, 'rgb(87,0,0)'],    # Dark red
             [0.5, 'rgb(255,0,0)'],    # Bright red
             [0.75, 'rgb(255,165,0)'], # Orange
@@ -48,7 +54,7 @@ class SurfacePlotter:
             go.Surface(
                 x=self.expiry_mesh,
                 y=self.strike_mesh,
-                z=self.vol_mesh * 100,  # Convert to percentage
+                z=self.vol_mesh * 100,
                 colorscale=hot_colorscale,
                 lighting=dict(
                     ambient=0.6,
@@ -63,13 +69,13 @@ class SurfacePlotter:
                     x=1.02,
                     thickness=20,
                     len=0.85,
-                    tickfont=dict(color='white'),  # White text for colorbar ticks
-                    title_font=dict(color='white')  # White text for colorbar title
+                    tickfont=dict(color=text_color),
+                    title_font=dict(color=text_color)
                 )
             )
         ])
 
-        # Update layout with dark theme
+        # Update layout with theme
         fig.update_layout(
             scene=dict(
                 xaxis_title='Time to Expiration (Years)',
@@ -81,47 +87,49 @@ class SurfacePlotter:
                     eye=dict(x=2.2, y=-2.2, z=1.5)
                 ),
                 xaxis=dict(
-                    gridcolor='rgba(255, 255, 255, 0.2)',  # Subtle white grid
+                    gridcolor=grid_color,
                     showbackground=True,
-                    backgroundcolor='rgb(0, 0, 0)',  # Black background
-                    title_font=dict(color='white'),   # White axis title
-                    tickfont=dict(color='white'),     # White tick labels
-                    zerolinecolor='rgba(255, 255, 255, 0.2)'
+                    backgroundcolor=bg_color,
+                    title_font=dict(color=text_color),
+                    tickfont=dict(color=text_color),
+                    zerolinecolor=grid_color
                 ),
                 yaxis=dict(
-                    gridcolor='rgba(255, 255, 255, 0.2)',
+                    gridcolor=grid_color,
                     showbackground=True,
-                    backgroundcolor='rgb(0, 0, 0)',
-                    title_font=dict(color='white'),
-                    tickfont=dict(color='white'),
-                    zerolinecolor='rgba(255, 255, 255, 0.2)'
+                    backgroundcolor=bg_color,
+                    title_font=dict(color=text_color),
+                    tickfont=dict(color=text_color),
+                    zerolinecolor=grid_color
                 ),
                 zaxis=dict(
-                    gridcolor='rgba(255, 255, 255, 0.2)',
+                    gridcolor=grid_color,
                     showbackground=True,
-                    backgroundcolor='rgb(0, 0, 0)',
-                    title_font=dict(color='white'),
-                    tickfont=dict(color='white'),
-                    zerolinecolor='rgba(255, 255, 255, 0.2)'
+                    backgroundcolor=bg_color,
+                    title_font=dict(color=text_color),
+                    tickfont=dict(color=text_color),
+                    zerolinecolor=grid_color
                 ),
-                bgcolor='rgb(0, 0, 0)'  # Black background for the 3D scene
+                bgcolor=bg_color
             ),
             width=900,
             height=800,
             margin=dict(l=0, r=100, t=0, b=0),
-            paper_bgcolor='rgb(0, 0, 0)',  # Black background for the figure
-            plot_bgcolor='rgb(0, 0, 0)',   # Black background for the plot
-            font=dict(color='white')       # White text for all other text elements
+            paper_bgcolor=bg_color,
+            plot_bgcolor=bg_color,
+            font=dict(color=text_color)
         )
 
         return fig
 
-    def add_smile_slices(self, fig: go.Figure, expiry_days: List[int] = None) -> go.Figure:
+    def add_smile_slices(self, fig: go.Figure, theme: str = 'dark', expiry_days: List[int] = None) -> go.Figure:
         """Add volatility smile curves for specific expiries"""
         if expiry_days is None:
             expiry_days = [30, 60, 90]
 
-        colors = ['rgba(255,255,255,0.8)'] * len(expiry_days)  # White lines for visibility
+        # Theme-dependent line color
+        line_color = 'rgba(255,255,255,0.8)' if theme.lower() == 'dark' else 'rgba(0,0,0,0.8)'
+        colors = [line_color] * len(expiry_days)
         
         for days, color in zip(expiry_days, colors):
             expiry_year = days/365
