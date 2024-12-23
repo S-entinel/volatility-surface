@@ -13,6 +13,36 @@ class SurfaceData:
     y_axis_type: Literal['Strike', 'Moneyness'] = 'Strike'
 
 class SurfacePlotter:
+    # Define available colormaps
+    COLORMAP_PRESETS = {
+        'Hot': [
+            [0, 'rgb(0,0,0)'],      # Black
+            [0.25, 'rgb(87,0,0)'],   # Dark red
+            [0.5, 'rgb(255,0,0)'],   # Bright red
+            [0.75, 'rgb(255,165,0)'], # Orange
+            [1.0, 'rgb(255,255,0)']   # Yellow
+        ],
+        'Viridis': 'Viridis',
+        'Plasma': 'Plasma',
+        'Blues': [
+            [0, 'rgb(8,48,107)'],     # Dark blue
+            [0.5, 'rgb(66,146,198)'],  # Medium blue
+            [1, 'rgb(198,219,239)']    # Light blue
+        ],
+        'Rainbow': [
+            [0, 'rgb(150,0,90)'],     # Purple
+            [0.25, 'rgb(0,0,200)'],   # Blue
+            [0.5, 'rgb(0,200,0)'],    # Green
+            [0.75, 'rgb(200,200,0)'], # Yellow
+            [1, 'rgb(200,0,0)']       # Red
+        ],
+        'Greyscale': [
+            [0, 'rgb(0,0,0)'],       # Black
+            [0.5, 'rgb(128,128,128)'], # Grey
+            [1, 'rgb(255,255,255)']    # White
+        ]
+    }
+
     def __init__(self, surface_data: SurfaceData):
         self.data = surface_data
         self._prepare_mesh()
@@ -33,29 +63,26 @@ class SurfacePlotter:
         
         self.vol_mesh = np.ma.array(self.vol_mesh, mask=np.isnan(self.vol_mesh))
     
-    def create_surface_plot(self, theme: str = 'dark') -> go.Figure:
-        """Generate interactive 3D surface plot with theme support"""
-        # Theme-dependent colors
+    def create_surface_plot(self, theme: str = 'dark', colormap: str = 'Hot') -> go.Figure:
+        """Generate interactive 3D surface plot with theme and colormap support"""
         is_dark = theme.lower() == 'dark'
         text_color = 'white' if is_dark else 'black'
         bg_color = 'rgb(0, 0, 0)' if is_dark else 'white'
         grid_color = 'rgba(255, 255, 255, 0.2)' if is_dark else 'rgb(180, 180, 180)'
         
-        # Hot colorscale
-        hot_colorscale = [
-            [0.0, 'rgb(0,0,0)' if is_dark else 'rgb(255,255,255)'],
-            [0.25, 'rgb(87,0,0)'],    # Dark red
-            [0.5, 'rgb(255,0,0)'],    # Bright red
-            [0.75, 'rgb(255,165,0)'], # Orange
-            [1.0, 'rgb(255,255,0)']   # Yellow
-        ]
+        # If colormap is 'Hot' and dark theme, adjust the first color to be darker
+        colorscale = self.COLORMAP_PRESETS[colormap]
+        if colormap == 'Hot' and is_dark:
+            colorscale[0][1] = 'rgb(0,0,0)'
+        elif colormap == 'Hot' and not is_dark:
+            colorscale[0][1] = 'rgb(255,255,255)'
 
         fig = go.Figure(data=[
             go.Surface(
                 x=self.expiry_mesh,
                 y=self.strike_mesh,
                 z=self.vol_mesh * 100,
-                colorscale=hot_colorscale,
+                colorscale=colorscale,
                 lighting=dict(
                     ambient=0.6,
                     diffuse=0.8,
