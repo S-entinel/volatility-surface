@@ -7,25 +7,32 @@ from src.data.market_data import OptionDataFetcher
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
 
-# Custom CSS styling
+# Custom CSS styling for professional look
 def apply_custom_style():
     st.markdown("""
         <style>
         .main > div {
             padding-top: 2rem;
         }
-        .stButton>button {
-            width: 100%;
+        .stApp {
+            font-family: "IBM Plex Mono", monospace;
         }
-        .stProgress .st-bo {
-            height: 20px;
+        .stAlert {
+            background-color: rgba(28, 131, 225, 0.1);
+            padding: 1rem;
+            border-radius: 4px;
         }
         div[data-testid="metric-container"] {
             background-color: rgba(28, 131, 225, 0.1);
             border: 1px solid rgba(28, 131, 225, 0.1);
             padding: 1rem;
-            border-radius: 5px;
-            margin-bottom: 0.5rem;
+            border-radius: 4px;
+            margin: 0.5rem 0;
+        }
+        .stButton > button {
+            width: 100%;
+            font-family: "IBM Plex Mono", monospace;
+            font-weight: 500;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -50,8 +57,8 @@ def calculate_ivs(options_df, risk_free_rate, dividend_yield):
                 S=row[1]['S'],
                 K=row[1]['strike'],
                 T=row[1]['T'],
-                r=risk_free_rate,
-                q=dividend_yield,
+                r=risk_free_rate/100,  # Convert from percentage
+                q=dividend_yield/100,   # Convert from percentage
                 market_price=row[1]['price'],
                 option_type=row[1]['type']
             )
@@ -76,17 +83,17 @@ def calculate_iv_statistics(valid_options, ivs, spot_price):
         'moneyness': [opt['strike']/spot_price for opt in valid_options]
     })
     
-    # ATM IV calculation
+    # ATM IV (using closest to 1.0 moneyness)
     atm_idx = abs(df['moneyness'] - 1.0).idxmin()
     atm_iv = df.loc[atm_idx, 'iv']
     
-    # IV Skew calculation
+    # IV Skew
     df_nearest = df[df['T'] == df['T'].min()]
     otm_put = df_nearest[df_nearest['moneyness'] < 0.95]['iv'].mean()
     otm_call = df_nearest[df_nearest['moneyness'] > 1.05]['iv'].mean()
     skew = otm_put - otm_call if (not np.isnan(otm_put) and not np.isnan(otm_call)) else None
     
-    # Term Structure calculation
+    # Term Structure
     df['atm_dist'] = abs(df['moneyness'] - 1.0)
     short_term = df[df['T'] == df['T'].min()]
     long_term = df[df['T'] == df['T'].max()]
@@ -102,16 +109,25 @@ def calculate_iv_statistics(valid_options, ivs, spot_price):
     }
 
 def main():
-    st.set_page_config(page_title="IV Surface Analysis", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(
+        page_title="IV Surface Analysis",
+        page_icon="IV",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
     apply_custom_style()
     
     st.title("Implied Volatility Surface Analysis")
     
     with st.sidebar:
         with st.expander("Market Data Configuration", expanded=True):
-            ticker = st.text_input("Ticker Symbol", value="SPY").upper()
-            min_volume = st.number_input("Min Option Volume", min_value=0, value=10)
+            ticker = st.text_input(
+                "Ticker Symbol",
+                value="SPY"
+            ).upper()
             
+            st.markdown("#### Strike Price Range")
             col1, col2 = st.columns(2)
             with col1:
                 min_strike_pct = st.number_input(
@@ -129,37 +145,49 @@ def main():
                     value=130.0,
                     format="%.1f"
                 )
+                
+            min_volume = st.number_input(
+                "Min Option Volume",
+                min_value=0,
+                value=10
+            )
         
         with st.expander("Model Parameters", expanded=True):
             risk_free_rate = st.number_input(
-                "Risk-Free Rate",
+                "Risk-Free Rate (%)",
                 min_value=0.0,
-                max_value=0.25,
-                value=0.015,
-                format="%.4f",
-                help="e.g., 0.015 for 1.5%"
+                max_value=25.0,
+                value=1.5,
+                step=0.1,
+                format="%.1f",
+                help="Annual risk-free rate (e.g., 1.5 for 1.5%)"
             )
-            
+
             dividend_yield = st.number_input(
-                "Dividend Yield",
+                "Dividend Yield (%)",
                 min_value=0.0,
-                max_value=0.25,
-                value=0.013,
-                format="%.4f",
-                help="e.g., 0.013 for 1.3%"
+                max_value=25.0,
+                value=1.3,
+                step=0.1,
+                format="%.1f",
+                help="Annual dividend yield (e.g., 1.3 for 1.3%)"
             )
         
         with st.expander("Visualization Settings", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                theme = st.selectbox("Theme", options=["Dark", "Light"])
-            with col2:
-                colormap = st.selectbox(
-                    "Color Scheme",
-                    options=["Hot", "Viridis", "Plasma", "Blues", "Rainbow", "Greyscale"],
-                    help="Select the color scheme for the surface plot"
-                )
-            y_axis_type = st.selectbox("Y-Axis", options=["Strike Price ($)", "Moneyness"])
+            theme = st.selectbox(
+                "Theme",
+                options=["Dark", "Light"]
+            )
+            
+            colormap = st.selectbox(
+                "Color Scheme",
+                options=["Hot", "Viridis", "Plasma", "Blues", "Rainbow", "Greyscale"]
+            )
+            
+            y_axis_type = st.selectbox(
+                "Y-Axis Scale",
+                options=["Strike Price ($)", "Moneyness"]
+            )
         
         generate = st.button("Generate Analysis", use_container_width=True)
 
@@ -205,32 +233,42 @@ def main():
                 plotter = SurfacePlotter(surface_data)
                 fig = plotter.create_surface_plot(theme=theme.lower(), colormap=colormap)
                 fig = plotter.add_smile_slices(fig, theme=theme.lower())
-                
-            # Clear status after successful computation
+            
             status.empty()
             
-            # Display results
             col1, col2 = st.columns([2, 1])
             
             with col1:
                 st.plotly_chart(fig, use_container_width=True)
             
             with col2:
+                st.markdown("### Market Overview")
+                st.metric("Current Price", f"${spot_price:.2f}")
+                st.metric("Valid Options", f"{len(ivs)} of {len(options_df)}")
+                
                 iv_stats = calculate_iv_statistics(valid_options, ivs, spot_price)
                 
-                st.subheader("Market Statistics")
-                metrics = {
-                    "Current Price": f"${spot_price:.2f}",
-                    "Valid Options": f"{len(ivs)} / {len(options_df)}",
-                    "ATM IV": f"{iv_stats['atm_iv']:.1f}%",
-                    "IV Skew": f"{iv_stats['iv_skew']:.1f}%" if iv_stats['iv_skew'] is not None else "N/A",
-                    "Term Structure": f"{iv_stats['term_structure']:.1f}%"
-                }
+                st.markdown("### Volatility Analytics")
+                st.metric(
+                    "ATM IV",
+                    f"{iv_stats['atm_iv']:.1f}%"
+                )
                 
-                for label, value in metrics.items():
-                    st.metric(label, value)
+                if iv_stats['iv_skew'] is not None:
+                    st.metric(
+                        "IV Skew",
+                        f"{iv_stats['iv_skew']:.1f}%"
+                    )
+                else:
+                    st.metric("IV Skew", "N/A")
+                
+                st.metric(
+                    "Term Structure",
+                    f"{iv_stats['term_structure']:.1f}%"
+                )
                 
                 if len(valid_options) > 0:
+                    st.markdown("---")
                     df_download = pd.DataFrame({
                         'Strike': [opt['strike'] for opt in valid_options],
                         'Days_to_Expiry': [opt['days_to_expiry'] for opt in valid_options],
@@ -239,7 +277,7 @@ def main():
                     })
                     
                     st.download_button(
-                        "Export Data",
+                        "Export Analysis",
                         data=df_download.to_csv(index=False).encode('utf-8'),
                         file_name=f'{ticker}_iv_analysis.csv',
                         mime='text/csv',

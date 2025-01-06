@@ -86,8 +86,8 @@ class SurfacePlotter:
                 lighting=dict(
                     ambient=0.6,
                     diffuse=0.8,
-                    fresnel=0.2,
-                    specular=0.4,
+                    fresnel=0,
+                    specular=0.1,
                     roughness=0.9
                 ),
                 colorbar=dict(
