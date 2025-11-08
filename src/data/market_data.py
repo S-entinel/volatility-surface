@@ -11,9 +11,16 @@ class OptionDataFetcher:
     def prepare_for_iv(self, 
                       min_strike_pct: float = 80.0,
                       max_strike_pct: float = 120.0,
-                      min_volume: int = 10) -> pd.DataFrame:  # Added min_volume parameter
+                      min_volume: int = 10,
+                      risk_free_rate: float = 0.045) -> pd.DataFrame:  # Updated default to 4.5%
         """
         Fetch and prepare option data for IV calculation
+        
+        Args:
+            min_strike_pct: Minimum strike as % of spot
+            max_strike_pct: Maximum strike as % of spot
+            min_volume: Minimum option volume filter
+            risk_free_rate: Risk-free rate (default 0.045 = 4.5%)
         """
         today = pd.Timestamp.now().normalize()
         
@@ -43,7 +50,7 @@ class OptionDataFetcher:
                     # Filter for valid prices and volume
                     calls = calls[(calls['bid'] > 0) & 
                                 (calls['ask'] > 0) & 
-                                (calls['volume'].fillna(0) >= min_volume)]  # Added volume filter
+                                (calls['volume'].fillna(0) >= min_volume)]
                     
                     for _, row in calls.iterrows():
                         strike = row['strike']
@@ -75,7 +82,7 @@ class OptionDataFetcher:
             
             # Add market data
             options_df['S'] = spot_price
-            options_df['r'] = 0.05  # Default risk-free rate
+            options_df['r'] = risk_free_rate  # Now parameterized
             options_df['q'] = self.get_dividend_yield()
             options_df['moneyness'] = options_df['strike'] / spot_price
             
