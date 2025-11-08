@@ -91,13 +91,15 @@ class SurfacePlotter:
                     roughness=0.9
                 ),
                 colorbar=dict(
-                    title='Implied Volatility (%)',
-                    titleside='right',
+                    title=dict(
+                        text='Implied Volatility (%)',
+                        side='right',
+                        font=dict(color=text_color)
+                    ),
                     x=1.02,
                     thickness=20,
                     len=0.85,
-                    tickfont=dict(color=text_color),
-                    title_font=dict(color=text_color)
+                    tickfont=dict(color=text_color)
                 )
             )
         ])
