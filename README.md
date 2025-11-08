@@ -11,7 +11,7 @@ A professional-grade tool for analyzing and visualizing implied volatility surfa
 
 ## Live Demo
 
-🔗 **[View Live App](https://volatility-surface-eompm5s2dtuksyhw7z5fea.streamlit.app)** ← Add your deployment URL here
+🔗 **[View Live App](https://volatility-surface-eompm5s2dtuksyhw7z5fea.streamlit.app)**
 
 ## Quick Start
 
