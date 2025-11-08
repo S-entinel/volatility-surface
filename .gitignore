@@ -28,5 +28,8 @@ venv/
 *.swp
 *.swo
 
+# Streamlit
+.streamlit/secrets.toml
+
 # Project specific
 volatility_surface.html
