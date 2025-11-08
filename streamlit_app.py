@@ -7,7 +7,6 @@ from src.data.market_data import OptionDataFetcher
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
 
-# Custom CSS styling for professional look
 def apply_custom_style():
     st.markdown("""
         <style>
@@ -44,28 +43,33 @@ def calculate_ivs(options_df, risk_free_rate, dividend_yield):
     valid_options = []
     total_options = len(options_df)
     
+    # Handle edge case
+    if total_options == 0:
+        return ivs, valid_options
+    
     progress_bar = st.progress(0)
     progress_text = st.empty()
     
-    for idx, row in enumerate(options_df.iterrows()):
-        current_progress = min(idx / (total_options - 1), 1.0) if total_options > 1 else 1.0
+    for idx, (_, row) in enumerate(options_df.iterrows()):
+        # Fixed progress calculation
+        current_progress = (idx + 1) / total_options
         progress_text.text(f"Calculating IV for option {idx + 1} of {total_options}")
         progress_bar.progress(current_progress)
         
         try:
             iv = iv_calc.calculate_iv(
-                S=row[1]['S'],
-                K=row[1]['strike'],
-                T=row[1]['T'],
-                r=risk_free_rate/100,  # Convert from percentage
-                q=dividend_yield/100,   # Convert from percentage
-                market_price=row[1]['price'],
-                option_type=row[1]['type']
+                S=row['S'],
+                K=row['strike'],
+                T=row['T'],
+                r=risk_free_rate,  # Already in decimal form
+                q=dividend_yield,   # Already in decimal form
+                market_price=row['price'],
+                option_type=row['type']
             )
             
-            if iv is not None:
+            if iv is not None and np.isfinite(iv):  # Added NaN/Inf check
                 ivs.append(iv)
-                valid_options.append(row[1])
+                valid_options.append(row)
         except Exception:
             continue
     
@@ -76,6 +80,13 @@ def calculate_ivs(options_df, risk_free_rate, dividend_yield):
 
 def calculate_iv_statistics(valid_options, ivs, spot_price):
     """Calculate key IV statistics for quant research"""
+    if len(valid_options) == 0 or len(ivs) == 0:
+        return {
+            'atm_iv': 0.0,
+            'iv_skew': None,
+            'term_structure': 0.0
+        }
+    
     df = pd.DataFrame({
         'strike': [opt['strike'] for opt in valid_options],
         'T': [opt['T'] for opt in valid_options],
@@ -89,18 +100,24 @@ def calculate_iv_statistics(valid_options, ivs, spot_price):
     
     # IV Skew
     df_nearest = df[df['T'] == df['T'].min()]
-    otm_put = df_nearest[df_nearest['moneyness'] < 0.95]['iv'].mean()
-    otm_call = df_nearest[df_nearest['moneyness'] > 1.05]['iv'].mean()
-    skew = otm_put - otm_call if (not np.isnan(otm_put) and not np.isnan(otm_call)) else None
+    if len(df_nearest) > 0:
+        otm_put = df_nearest[df_nearest['moneyness'] < 0.95]['iv'].mean()
+        otm_call = df_nearest[df_nearest['moneyness'] > 1.05]['iv'].mean()
+        skew = otm_put - otm_call if (not np.isnan(otm_put) and not np.isnan(otm_call)) else None
+    else:
+        skew = None
     
     # Term Structure
     df['atm_dist'] = abs(df['moneyness'] - 1.0)
     short_term = df[df['T'] == df['T'].min()]
     long_term = df[df['T'] == df['T'].max()]
     
-    short_atm = short_term.loc[short_term['atm_dist'].idxmin(), 'iv']
-    long_atm = long_term.loc[long_term['atm_dist'].idxmin(), 'iv']
-    term_structure = long_atm - short_atm
+    if len(short_term) > 0 and len(long_term) > 0:
+        short_atm = short_term.loc[short_term['atm_dist'].idxmin(), 'iv']
+        long_atm = long_term.loc[long_term['atm_dist'].idxmin(), 'iv']
+        term_structure = long_atm - short_atm
+    else:
+        term_structure = 0.0
     
     return {
         'atm_iv': atm_iv * 100,
@@ -111,7 +128,7 @@ def calculate_iv_statistics(valid_options, ivs, spot_price):
 def main():
     st.set_page_config(
         page_title="IV Surface Analysis",
-        page_icon="IV",
+        page_icon="📊",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -157,10 +174,10 @@ def main():
                 "Risk-Free Rate (%)",
                 min_value=0.0,
                 max_value=25.0,
-                value=1.5,
+                value=4.5,  # Updated default
                 step=0.1,
                 format="%.1f",
-                help="Annual risk-free rate (e.g., 1.5 for 1.5%)"
+                help="Annual risk-free rate (e.g., 4.5 for 4.5%)"
             )
 
             dividend_yield = st.number_input(
@@ -198,11 +215,16 @@ def main():
             with status.container():
                 st.info("Fetching market data...")
                 
+                # Convert percentages to decimals
+                risk_free_decimal = risk_free_rate / 100
+                dividend_decimal = dividend_yield / 100
+                
                 fetcher = OptionDataFetcher(ticker)
                 options_df = fetcher.prepare_for_iv(
                     min_strike_pct=min_strike_pct,
                     max_strike_pct=max_strike_pct,
-                    min_volume=min_volume
+                    min_volume=min_volume,
+                    risk_free_rate=risk_free_decimal  # Pass the correct rate
                 )
                 
                 if options_df.empty:
@@ -213,10 +235,10 @@ def main():
                 st.success(f"Market data fetched - {ticker} @ ${spot_price:.2f}")
                 
                 st.info("Computing implied volatilities...")
-                ivs, valid_options = calculate_ivs(options_df, risk_free_rate, dividend_yield)
+                ivs, valid_options = calculate_ivs(options_df, risk_free_decimal, dividend_decimal)
                 
                 if len(ivs) < 10:
-                    st.error("Insufficient valid options for analysis.")
+                    st.error(f"Insufficient valid options for analysis. Found only {len(ivs)} valid IVs.")
                     return
                 
                 strikes = np.array([opt['strike']/spot_price for opt in valid_options]) if y_axis_type == "Moneyness" \
@@ -279,13 +301,14 @@ def main():
                     st.download_button(
                         "Export Analysis",
                         data=df_download.to_csv(index=False).encode('utf-8'),
-                        file_name=f'{ticker}_iv_analysis.csv',
+                        file_name=f'{ticker}_iv_analysis_{datetime.now().strftime("%Y%m%d")}.csv',
                         mime='text/csv',
                         use_container_width=True
                     )
             
         except Exception as e:
             st.error(f"Analysis Error: {str(e)}")
+            
 
 if __name__ == "__main__":
     main()

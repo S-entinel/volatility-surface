@@ -3,6 +3,7 @@ from scipy.interpolate import griddata
 import plotly.graph_objects as go
 from typing import List, Tuple, Literal
 from dataclasses import dataclass
+import copy
 
 @dataclass
 class SurfaceData:
@@ -49,6 +50,10 @@ class SurfacePlotter:
 
     def _prepare_mesh(self):
         """Create interpolated mesh for surface plotting"""
+        # Add validation
+        if len(self.data.strikes) == 0 or len(self.data.expiries) == 0:
+            raise ValueError("Cannot create mesh with empty data")
+        
         self.strike_mesh, self.expiry_mesh = np.meshgrid(
             np.linspace(self.data.strikes.min(), self.data.strikes.max(), 50),
             np.linspace(self.data.expiries.min(), self.data.expiries.max(), 50)
@@ -70,12 +75,15 @@ class SurfacePlotter:
         bg_color = 'rgb(0, 0, 0)' if is_dark else 'white'
         grid_color = 'rgba(255, 255, 255, 0.2)' if is_dark else 'rgb(180, 180, 180)'
         
-        # If colormap is 'Hot' and dark theme, adjust the first color to be darker
-        colorscale = self.COLORMAP_PRESETS[colormap]
-        if colormap == 'Hot' and is_dark:
-            colorscale[0][1] = 'rgb(0,0,0)'
-        elif colormap == 'Hot' and not is_dark:
-            colorscale[0][1] = 'rgb(255,255,255)'
+        # FIXED: Deep copy to prevent mutation of class variable
+        colorscale = copy.deepcopy(self.COLORMAP_PRESETS[colormap])
+        
+        # Adjust colorscale based on theme
+        if isinstance(colorscale, list) and colormap == 'Hot':
+            if is_dark:
+                colorscale[0][1] = 'rgb(0,0,0)'
+            else:
+                colorscale[0][1] = 'rgb(255,255,255)'
 
         fig = go.Figure(data=[
             go.Surface(
@@ -164,15 +172,17 @@ class SurfacePlotter:
             expiry_year = days/365
             idx = np.abs(self.expiry_mesh[0] - expiry_year).argmin()
             
-            fig.add_trace(
-                go.Scatter3d(
-                    x=self.expiry_mesh[idx],
-                    y=self.strike_mesh[idx],
-                    z=self.vol_mesh[idx] * 100,
-                    mode='lines',
-                    line=dict(color=color, width=3),
-                    showlegend=False
+            # Add validation to prevent index errors
+            if idx < len(self.expiry_mesh) and idx < len(self.vol_mesh):
+                fig.add_trace(
+                    go.Scatter3d(
+                        x=self.expiry_mesh[idx],
+                        y=self.strike_mesh[idx],
+                        z=self.vol_mesh[idx] * 100,
+                        mode='lines',
+                        line=dict(color=color, width=3),
+                        showlegend=False
+                    )
                 )
-            )
         
         return fig
