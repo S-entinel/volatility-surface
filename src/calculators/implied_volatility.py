@@ -10,6 +10,7 @@ from scipy.stats import norm
 from scipy.optimize import brentq
 from typing import Optional
 from src.utils.logger import setup_logger
+from src.config.config import IVCalculationConfig, ModelConfig
 
 logger = setup_logger(__name__)
 
@@ -120,7 +121,9 @@ class IVCalculator:
         
         # Check intrinsic value to catch arbitrage violations
         intrinsic_value = max(S - K, 0) if option_type == 'call' else max(K - S, 0)
-        if market_price < intrinsic_value * 0.99:  # Allow small tolerance
+        tolerance = IVCalculationConfig.INTRINSIC_VALUE_TOLERANCE
+        
+        if market_price < intrinsic_value * tolerance:
             logger.debug(f"Market price ({market_price:.4f}) below intrinsic value ({intrinsic_value:.4f})")
             self.failed_count += 1
             return None
@@ -133,8 +136,12 @@ class IVCalculator:
                 return bs_put_price(S, K, T, r, sigma, q) - market_price
 
         try:
-            # Use Brent's method to find the root
-            implied_vol = brentq(objective_function, 1e-6, 5.0)
+            # Use Brent's method to find the root with config bounds
+            implied_vol = brentq(
+                objective_function, 
+                IVCalculationConfig.IV_MIN_BOUND, 
+                IVCalculationConfig.IV_MAX_BOUND
+            )
             return implied_vol
             
         except ValueError as e:
@@ -160,7 +167,7 @@ class IVCalculator:
                         q: float,
                         option_type: str) -> Optional[str]:
         """
-        Validate all input parameters.
+        Validate all input parameters using config thresholds.
         
         Args:
             S, K, T, r, market_price, q, option_type: Same as calculate_iv
@@ -168,21 +175,21 @@ class IVCalculator:
         Returns:
             Error message if validation fails, None if all inputs valid
         """
-        # Check for positive values
-        if S <= 0:
-            return f"Spot price must be positive (got {S})"
-        if K <= 0:
-            return f"Strike price must be positive (got {K})"
-        if T <= 0:
-            return f"Time to expiration must be positive (got {T})"
-        if market_price <= 0:
-            return f"Market price must be positive (got {market_price})"
+        # Check for positive values using config thresholds
+        if S < IVCalculationConfig.MIN_SPOT_PRICE:
+            return f"Spot price must be >= {IVCalculationConfig.MIN_SPOT_PRICE} (got {S})"
+        if K < IVCalculationConfig.MIN_STRIKE_PRICE:
+            return f"Strike price must be >= {IVCalculationConfig.MIN_STRIKE_PRICE} (got {K})"
+        if T < IVCalculationConfig.MIN_TIME_TO_EXPIRY:
+            return f"Time to expiration must be >= {IVCalculationConfig.MIN_TIME_TO_EXPIRY} (got {T})"
+        if market_price < IVCalculationConfig.MIN_MARKET_PRICE:
+            return f"Market price must be >= {IVCalculationConfig.MIN_MARKET_PRICE} (got {market_price})"
         
-        # Check for reasonable ranges
-        if r < 0 or r > 1:
-            return f"Risk-free rate should be between 0 and 1 (got {r})"
-        if q < 0 or q > 1:
-            return f"Dividend yield should be between 0 and 1 (got {q})"
+        # Check for reasonable ranges using model config
+        if r < ModelConfig.MIN_RISK_FREE_RATE or r > ModelConfig.MAX_RISK_FREE_RATE:
+            return f"Risk-free rate should be between {ModelConfig.MIN_RISK_FREE_RATE} and {ModelConfig.MAX_RISK_FREE_RATE} (got {r})"
+        if q < ModelConfig.MIN_DIVIDEND_YIELD or q > ModelConfig.MAX_DIVIDEND_YIELD:
+            return f"Dividend yield should be between {ModelConfig.MIN_DIVIDEND_YIELD} and {ModelConfig.MAX_DIVIDEND_YIELD} (got {q})"
         
         # Validate option type
         if option_type.lower() not in ['call', 'put']:

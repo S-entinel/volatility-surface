@@ -6,6 +6,12 @@ import time
 from src.data.market_data import OptionDataFetcher
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
+from src.config.config import (
+    UIConfig, 
+    MarketDataConfig, 
+    ModelConfig, 
+    StatisticsConfig
+)
 
 def apply_custom_style():
     st.markdown("""
@@ -98,12 +104,16 @@ def calculate_iv_statistics(valid_options, ivs, spot_price):
     atm_idx = abs(df['moneyness'] - 1.0).idxmin()
     atm_iv = df.loc[atm_idx, 'iv']
     
-    # IV Skew
+    # IV Skew - using config values
     df_nearest = df[df['T'] == df['T'].min()]
     if len(df_nearest) > 0:
-        otm_put = df_nearest[df_nearest['moneyness'] < 0.95]['iv'].mean()
-        otm_call = df_nearest[df_nearest['moneyness'] > 1.05]['iv'].mean()
-        skew = otm_put - otm_call if (not np.isnan(otm_put) and not np.isnan(otm_call)) else None
+        otm_puts = df_nearest[df_nearest['moneyness'] < StatisticsConfig.OTM_PUT_MONEYNESS]['iv']
+        otm_calls = df_nearest[df_nearest['moneyness'] > StatisticsConfig.OTM_CALL_MONEYNESS]['iv']
+        
+        otm_put = otm_puts.mean() if len(otm_puts) > 0 else None
+        otm_call = otm_calls.mean() if len(otm_calls) > 0 else None
+        
+        skew = otm_put - otm_call if (otm_put is not None and otm_call is not None) else None
     else:
         skew = None
     
@@ -120,9 +130,9 @@ def calculate_iv_statistics(valid_options, ivs, spot_price):
         term_structure = 0.0
     
     return {
-        'atm_iv': atm_iv * 100,
-        'iv_skew': skew * 100 if skew is not None else None,
-        'term_structure': term_structure * 100
+        'atm_iv': atm_iv * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
+        'iv_skew': skew * StatisticsConfig.IV_DISPLAY_MULTIPLIER if skew is not None else None,
+        'term_structure': term_structure * StatisticsConfig.IV_DISPLAY_MULTIPLIER
     }
 
 def main():
@@ -141,7 +151,7 @@ def main():
         with st.expander("Market Data Configuration", expanded=True):
             ticker = st.text_input(
                 "Ticker Symbol",
-                value="SPY"
+                value=UIConfig.DEFAULT_TICKER
             ).upper()
             
             st.markdown("#### Strike Price Range")
@@ -149,43 +159,43 @@ def main():
             with col1:
                 min_strike_pct = st.number_input(
                     "Min Strike %",
-                    min_value=50.0,
-                    max_value=99.0,
-                    value=70.0,
+                    min_value=UIConfig.MIN_STRIKE_PCT_LOWER,
+                    max_value=UIConfig.MIN_STRIKE_PCT_UPPER,
+                    value=MarketDataConfig.DEFAULT_MIN_STRIKE_PCT,
                     format="%.1f"
                 )
             with col2:
                 max_strike_pct = st.number_input(
                     "Max Strike %",
                     min_value=min_strike_pct + 1,
-                    max_value=200.0,
-                    value=130.0,
+                    max_value=UIConfig.MAX_STRIKE_PCT_UPPER,
+                    value=MarketDataConfig.DEFAULT_MAX_STRIKE_PCT,
                     format="%.1f"
                 )
                 
             min_volume = st.number_input(
                 "Min Option Volume",
-                min_value=0,
-                value=10
+                min_value=MarketDataConfig.MIN_VOLUME_THRESHOLD,
+                value=MarketDataConfig.DEFAULT_MIN_VOLUME
             )
         
         with st.expander("Model Parameters", expanded=True):
             risk_free_rate = st.number_input(
                 "Risk-Free Rate (%)",
-                min_value=0.0,
-                max_value=25.0,
-                value=4.5,  # Updated default
-                step=0.1,
+                min_value=UIConfig.RISK_FREE_RATE_MIN,
+                max_value=UIConfig.RISK_FREE_RATE_MAX,
+                value=ModelConfig.DEFAULT_RISK_FREE_RATE * 100,  # Convert to percentage
+                step=UIConfig.RISK_FREE_RATE_STEP,
                 format="%.1f",
                 help="Annual risk-free rate (e.g., 4.5 for 4.5%)"
             )
 
             dividend_yield = st.number_input(
                 "Dividend Yield (%)",
-                min_value=0.0,
-                max_value=25.0,
-                value=1.3,
-                step=0.1,
+                min_value=UIConfig.DIVIDEND_YIELD_MIN,
+                max_value=UIConfig.DIVIDEND_YIELD_MAX,
+                value=ModelConfig.DEFAULT_DIVIDEND_YIELD * 100,  # Convert to percentage
+                step=UIConfig.DIVIDEND_YIELD_STEP,
                 format="%.1f",
                 help="Annual dividend yield (e.g., 1.3 for 1.3%)"
             )
@@ -193,17 +203,17 @@ def main():
         with st.expander("Visualization Settings", expanded=True):
             theme = st.selectbox(
                 "Theme",
-                options=["Dark", "Light"]
+                options=UIConfig.AVAILABLE_THEMES
             )
             
             colormap = st.selectbox(
                 "Color Scheme",
-                options=["Hot", "Viridis", "Plasma", "Blues", "Rainbow", "Greyscale"]
+                options=UIConfig.AVAILABLE_COLORMAPS
             )
             
             y_axis_type = st.selectbox(
                 "Y-Axis Scale",
-                options=["Strike Price ($)", "Moneyness"]
+                options=UIConfig.AVAILABLE_Y_AXIS_TYPES
             )
         
         generate = st.button("Generate Analysis", use_container_width=True)
@@ -231,13 +241,18 @@ def main():
                     st.error("No valid options data found.")
                     return
                 
+                # Check against minimum threshold from config
+                if len(options_df) < MarketDataConfig.MIN_VALID_OPTIONS:
+                    st.error(f"Insufficient options data. Found {len(options_df)}, need at least {MarketDataConfig.MIN_VALID_OPTIONS}.")
+                    return
+                
                 spot_price = options_df['S'].iloc[0]
                 st.success(f"Market data fetched - {ticker} @ ${spot_price:.2f}")
                 
                 st.info("Computing implied volatilities...")
                 ivs, valid_options = calculate_ivs(options_df, risk_free_decimal, dividend_decimal)
                 
-                if len(ivs) < 10:
+                if len(ivs) < MarketDataConfig.MIN_VALID_OPTIONS:
                     st.error(f"Insufficient valid options for analysis. Found only {len(ivs)} valid IVs.")
                     return
                 

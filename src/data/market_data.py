@@ -10,6 +10,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
 from src.utils.logger import setup_logger
+from src.config.config import MarketDataConfig, ModelConfig
 
 logger = setup_logger(__name__)
 
@@ -37,18 +38,18 @@ class OptionDataFetcher:
         logger.info(f"Initializing OptionDataFetcher for {symbol}")
         
     def prepare_for_iv(self, 
-                      min_strike_pct: float = 80.0,
-                      max_strike_pct: float = 120.0,
-                      min_volume: int = 10,
-                      risk_free_rate: float = 0.045) -> pd.DataFrame:
+                      min_strike_pct: float = MarketDataConfig.DEFAULT_MIN_STRIKE_PCT,
+                      max_strike_pct: float = MarketDataConfig.DEFAULT_MAX_STRIKE_PCT,
+                      min_volume: int = MarketDataConfig.DEFAULT_MIN_VOLUME,
+                      risk_free_rate: float = ModelConfig.DEFAULT_RISK_FREE_RATE) -> pd.DataFrame:
         """
         Fetch and prepare option data for IV calculation.
         
         Args:
-            min_strike_pct: Minimum strike as % of spot (default: 80%)
-            max_strike_pct: Maximum strike as % of spot (default: 120%)
-            min_volume: Minimum option volume filter (default: 10)
-            risk_free_rate: Risk-free rate in decimal form (default: 0.045 = 4.5%)
+            min_strike_pct: Minimum strike as % of spot (default from config)
+            max_strike_pct: Maximum strike as % of spot (default from config)
+            min_volume: Minimum option volume filter (default from config)
+            risk_free_rate: Risk-free rate in decimal form (default from config)
         
         Returns:
             DataFrame with prepared option data
@@ -136,7 +137,7 @@ class OptionDataFetcher:
         Fetch valid option expiration dates.
         
         Returns:
-            List of expiration dates (excluding dates within 7 days)
+            List of expiration dates (excluding dates within MIN_DAYS_TO_EXPIRY)
             
         Raises:
             ValueError: If no valid expiration dates found
@@ -149,10 +150,11 @@ class OptionDataFetcher:
             if not expirations:
                 raise ValueError(f'No option expiration dates available for {self.symbol}')
             
-            # Filter for dates more than 7 days out
+            # Filter for dates more than MIN_DAYS_TO_EXPIRY days out
+            min_days = MarketDataConfig.MIN_DAYS_TO_EXPIRY
             exp_dates = [
                 pd.Timestamp(exp) for exp in expirations 
-                if pd.Timestamp(exp) > today + timedelta(days=7)
+                if pd.Timestamp(exp) > today + timedelta(days=min_days)
             ]
             
             if not exp_dates:

@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from typing import List, Tuple, Literal
 from dataclasses import dataclass
 import copy
+from src.config.config import VisualizationConfig
 
 @dataclass
 class SurfaceData:
@@ -54,9 +55,11 @@ class SurfacePlotter:
         if len(self.data.strikes) == 0 or len(self.data.expiries) == 0:
             raise ValueError("Cannot create mesh with empty data")
         
+        grid_size = VisualizationConfig.MESH_GRID_SIZE
+        
         self.strike_mesh, self.expiry_mesh = np.meshgrid(
-            np.linspace(self.data.strikes.min(), self.data.strikes.max(), 50),
-            np.linspace(self.data.expiries.min(), self.data.expiries.max(), 50)
+            np.linspace(self.data.strikes.min(), self.data.strikes.max(), grid_size),
+            np.linspace(self.data.expiries.min(), self.data.expiries.max(), grid_size)
         )
         
         points = np.column_stack((self.data.expiries, self.data.strikes))
@@ -89,14 +92,14 @@ class SurfacePlotter:
             go.Surface(
                 x=self.expiry_mesh,
                 y=self.strike_mesh,
-                z=self.vol_mesh * 100,
+                z=self.vol_mesh * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
                 colorscale=colorscale,
                 lighting=dict(
-                    ambient=0.6,
-                    diffuse=0.8,
-                    fresnel=0,
-                    specular=0.1,
-                    roughness=0.9
+                    ambient=VisualizationConfig.LIGHTING_AMBIENT,
+                    diffuse=VisualizationConfig.LIGHTING_DIFFUSE,
+                    fresnel=VisualizationConfig.LIGHTING_FRESNEL,
+                    specular=VisualizationConfig.LIGHTING_SPECULAR,
+                    roughness=VisualizationConfig.LIGHTING_ROUGHNESS
                 ),
                 colorbar=dict(
                     title=dict(
@@ -112,7 +115,7 @@ class SurfacePlotter:
             )
         ])
 
-        # Update layout with theme
+        # Update layout with theme and config values
         fig.update_layout(
             scene=dict(
                 xaxis_title='Time to Expiration (Years)',
@@ -120,8 +123,12 @@ class SurfacePlotter:
                 zaxis_title='Implied Volatility (%)',
                 camera=dict(
                     up=dict(x=0, y=0, z=1),
-                    center=dict(x=0, y=0, z=-0.2),
-                    eye=dict(x=2.2, y=-2.2, z=1.5)
+                    center=dict(x=0, y=0, z=VisualizationConfig.CAMERA_CENTER_Z),
+                    eye=dict(
+                        x=VisualizationConfig.CAMERA_EYE_X, 
+                        y=VisualizationConfig.CAMERA_EYE_Y, 
+                        z=VisualizationConfig.CAMERA_EYE_Z
+                    )
                 ),
                 xaxis=dict(
                     gridcolor=grid_color,
@@ -149,8 +156,8 @@ class SurfacePlotter:
                 ),
                 bgcolor=bg_color
             ),
-            width=900,
-            height=800,
+            width=VisualizationConfig.DEFAULT_PLOT_WIDTH,
+            height=VisualizationConfig.DEFAULT_PLOT_HEIGHT,
             margin=dict(l=0, r=100, t=0, b=0),
             paper_bgcolor=bg_color,
             plot_bgcolor=bg_color,
@@ -162,7 +169,7 @@ class SurfacePlotter:
     def add_smile_slices(self, fig: go.Figure, theme: str = 'dark', expiry_days: List[int] = None) -> go.Figure:
         """Add volatility smile curves for specific expiries"""
         if expiry_days is None:
-            expiry_days = [30, 60, 90]
+            expiry_days = VisualizationConfig.DEFAULT_SMILE_DAYS
 
         # Theme-dependent line color
         line_color = 'rgba(255,255,255,0.8)' if theme.lower() == 'dark' else 'rgba(0,0,0,0.8)'
@@ -178,11 +185,15 @@ class SurfacePlotter:
                     go.Scatter3d(
                         x=self.expiry_mesh[idx],
                         y=self.strike_mesh[idx],
-                        z=self.vol_mesh[idx] * 100,
+                        z=self.vol_mesh[idx] * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
                         mode='lines',
-                        line=dict(color=color, width=3),
+                        line=dict(color=color, width=VisualizationConfig.SMILE_LINE_WIDTH),
                         showlegend=False
                     )
                 )
         
         return fig
+
+
+# Import StatisticsConfig for IV_DISPLAY_MULTIPLIER
+from src.config.config import StatisticsConfig
