@@ -1,22 +1,56 @@
+"""
+3D surface plotting for implied volatility visualization.
+
+Creates interactive Plotly 3D surface plots with comprehensive type hints
+for all classes and methods.
+"""
+
 import numpy as np
 from scipy.interpolate import griddata
 import plotly.graph_objects as go
-from typing import List, Tuple, Literal
+from typing import List, Tuple, Literal, Dict, Any, Optional
 from dataclasses import dataclass
 import copy
 from src.config.config import VisualizationConfig
 
+# Type alias for Y-axis types
+YAxisType = Literal['Strike', 'Moneyness']
+
 @dataclass
 class SurfaceData:
+    """
+    Container for volatility surface data.
+    
+    Attributes:
+        strikes: Array of strike prices or moneyness values
+        expiries: Array of expiration times (in years)
+        ivs: Array of implied volatilities (in decimal form)
+        spot_price: Current spot price of the underlying
+        y_axis_type: Type of Y-axis ('Strike' or 'Moneyness')
+    """
     strikes: np.ndarray
     expiries: np.ndarray
     ivs: np.ndarray
     spot_price: float
-    y_axis_type: Literal['Strike', 'Moneyness'] = 'Strike'
+    y_axis_type: YAxisType = 'Strike'
 
 class SurfacePlotter:
+    """
+    3D surface plotter for implied volatility visualization.
+    
+    Creates interactive Plotly surface plots with customizable themes,
+    colormaps, and volatility smile overlays.
+    
+    Attributes:
+        COLORMAP_PRESETS: Dictionary of available colormap configurations
+        data: SurfaceData instance containing the volatility surface data
+        strike_mesh: 2D array of strike values for surface mesh
+        expiry_mesh: 2D array of expiry values for surface mesh
+        vol_mesh: 2D array of interpolated volatility values
+    """
+    
     # Define available colormaps
-    COLORMAP_PRESETS = {
+    COLORMAP_PRESETS: Dict[str, Any] = {
         'Hot': [
             [0, 'rgb(0,0,0)'],      # Black
             [0.25, 'rgb(87,0,0)'],   # Dark red
@@ -49,8 +83,19 @@ class SurfacePlotter:
         self.data = surface_data
         self._prepare_mesh()
 
-    def _prepare_mesh(self):
-        """Create interpolated mesh for surface plotting"""
+    def _prepare_mesh(self) -> None:
+        """
+        Create interpolated mesh for surface plotting.
+        
+        Generates a regular grid of strike and expiry values, then interpolates
+        the implied volatility values onto this grid using linear interpolation.
+        
+        Raises:
+            ValueError: If data contains empty arrays
+            
+        Returns:
+            None (sets instance attributes strike_mesh, expiry_mesh, vol_mesh)
+        """
         # Add validation
         if len(self.data.strikes) == 0 or len(self.data.expiries) == 0:
             raise ValueError("Cannot create mesh with empty data")
@@ -72,7 +117,21 @@ class SurfacePlotter:
         self.vol_mesh = np.ma.array(self.vol_mesh, mask=np.isnan(self.vol_mesh))
     
     def create_surface_plot(self, theme: str = 'dark', colormap: str = 'Hot') -> go.Figure:
-        """Generate interactive 3D surface plot with theme and colormap support"""
+        """
+        Generate interactive 3D surface plot with theme and colormap support.
+        
+        Args:
+            theme: Theme name ('dark' or 'light')
+            colormap: Colormap name from COLORMAP_PRESETS
+            
+        Returns:
+            Plotly Figure object with configured 3D surface
+            
+        Example:
+            >>> plotter = SurfacePlotter(surface_data)
+            >>> fig = plotter.create_surface_plot(theme='dark', colormap='Viridis')
+            >>> fig.show()
+        """
         is_dark = theme.lower() == 'dark'
         text_color = 'white' if is_dark else 'black'
         bg_color = 'rgb(0, 0, 0)' if is_dark else 'white'
@@ -166,8 +225,23 @@ class SurfacePlotter:
 
         return fig
 
-    def add_smile_slices(self, fig: go.Figure, theme: str = 'dark', expiry_days: List[int] = None) -> go.Figure:
-        """Add volatility smile curves for specific expiries"""
+    def add_smile_slices(self, fig: go.Figure, theme: str = 'dark', 
+                        expiry_days: Optional[List[int]] = None) -> go.Figure:
+        """
+        Add volatility smile curves for specific expiries.
+        
+        Args:
+            fig: Existing Plotly Figure to add smile slices to
+            theme: Theme name ('dark' or 'light') for line color
+            expiry_days: List of expiry days to show slices (default from config)
+            
+        Returns:
+            Updated Plotly Figure with smile slice overlays
+            
+        Example:
+            >>> fig = plotter.create_surface_plot()
+            >>> fig = plotter.add_smile_slices(fig, expiry_days=[30, 60, 90])
+        """
         if expiry_days is None:
             expiry_days = VisualizationConfig.DEFAULT_SMILE_DAYS
 

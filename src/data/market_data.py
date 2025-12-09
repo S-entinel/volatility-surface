@@ -2,13 +2,14 @@
 Market data fetching and preparation module.
 
 Fetches option chain data from yfinance with comprehensive error handling,
-logging, and data quality validation.
+logging, and data quality validation. All functions include complete type hints
+for better IDE support and type safety.
 """
 
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from src.utils.logger import setup_logger
 from src.config.config import MarketDataConfig, ModelConfig
 
@@ -263,6 +264,9 @@ class OptionDataFetcher:
         
         Args:
             df: Prepared options DataFrame
+            
+        Returns:
+            None
         """
         if df.empty:
             logger.warning("Empty DataFrame - no metrics to report")

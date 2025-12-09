@@ -3,9 +3,12 @@ Central configuration for Volatility Surface Analyser.
 
 All magic numbers, default values, and thresholds are defined here
 for easy maintenance and modification.
+
+Type hints are used throughout to ensure type safety and improve
+IDE support for autocomplete and error detection.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Type
 
 
 class MarketDataConfig:
@@ -148,12 +151,17 @@ class LoggingConfig:
 
 
 # Convenience function to get all configs as a dict
-def get_all_configs() -> Dict[str, object]:
+def get_all_configs() -> Dict[str, Type]:
     """
     Get all configuration classes as a dictionary.
     
     Returns:
         Dictionary mapping config names to config classes
+    
+    Example:
+        >>> configs = get_all_configs()
+        >>> configs['market_data'].DEFAULT_MIN_STRIKE_PCT
+        70.0
     """
     return {
         'market_data': MarketDataConfig,

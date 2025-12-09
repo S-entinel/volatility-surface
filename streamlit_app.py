@@ -1,8 +1,16 @@
+"""
+Streamlit application for Implied Volatility Surface Analysis.
+
+Main application with complete type hints for all functions and proper
+return type annotations.
+"""
+
 import streamlit as st
 import numpy as np
 import pandas as pd
 from datetime import datetime
 import time
+from typing import Tuple, List, Dict, Optional, Any
 from src.data.market_data import OptionDataFetcher
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
@@ -13,7 +21,14 @@ from src.config.config import (
     StatisticsConfig
 )
 
-def apply_custom_style():
+
+def apply_custom_style() -> None:
+    """
+    Apply custom CSS styling to the Streamlit app.
+    
+    Returns:
+        None
+    """
     st.markdown("""
         <style>
         .main > div {
@@ -42,8 +57,22 @@ def apply_custom_style():
         </style>
     """, unsafe_allow_html=True)
 
-def calculate_ivs(options_df, risk_free_rate, dividend_yield):
-    """Calculate IVs with proper progress tracking"""
+def calculate_ivs(options_df: pd.DataFrame, risk_free_rate: float, 
+                 dividend_yield: float) -> Tuple[List[float], List[Dict[str, Any]]]:
+    """
+    Calculate IVs with proper progress tracking.
+    
+    Args:
+        options_df: DataFrame containing option data
+        risk_free_rate: Risk-free rate in decimal form
+        dividend_yield: Dividend yield in decimal form
+        
+    Returns:
+        Tuple of (list of IVs, list of valid option dictionaries)
+        
+    Example:
+        >>> ivs, valid_options = calculate_ivs(df, 0.045, 0.013)
+    """
     iv_calc = IVCalculator()
     ivs = []
     valid_options = []
@@ -84,8 +113,26 @@ def calculate_ivs(options_df, risk_free_rate, dividend_yield):
     
     return ivs, valid_options
 
-def calculate_iv_statistics(valid_options, ivs, spot_price):
-    """Calculate key IV statistics for quant research"""
+def calculate_iv_statistics(valid_options: List[Dict[str, Any]], ivs: List[float], 
+                           spot_price: float) -> Dict[str, Optional[float]]:
+    """
+    Calculate key IV statistics for quant research.
+    
+    Args:
+        valid_options: List of valid option dictionaries
+        ivs: List of implied volatilities
+        spot_price: Current spot price
+        
+    Returns:
+        Dictionary containing:
+            - atm_iv: At-the-money implied volatility (%)
+            - iv_skew: IV skew (OTM put - OTM call, %)
+            - term_structure: Term structure (long - short ATM IV, %)
+            
+    Example:
+        >>> stats = calculate_iv_statistics(valid_opts, ivs, 100.0)
+        >>> print(f"ATM IV: {stats['atm_iv']:.1f}%")
+    """
     if len(valid_options) == 0 or len(ivs) == 0:
         return {
             'atm_iv': 0.0,
@@ -135,7 +182,16 @@ def calculate_iv_statistics(valid_options, ivs, spot_price):
         'term_structure': term_structure * StatisticsConfig.IV_DISPLAY_MULTIPLIER
     }
 
-def main():
+def main() -> None:
+    """
+    Main Streamlit application entry point.
+    
+    Sets up the UI, handles user interactions, and orchestrates
+    data fetching, IV calculation, and visualization.
+    
+    Returns:
+        None
+    """
     st.set_page_config(
         page_title="IV Surface Analysis",
         page_icon="📊",
