@@ -1,0 +1,857 @@
+================================================================================
+Running Volatility Surface Analyzer Test Suite
+================================================================================
+
+=================================================================================== test session starts ===================================================================================
+platform darwin -- Python 3.9.12, pytest-8.4.2, pluggy-1.6.0 -- /Users/suvobaidya/volatility-surface/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/suvobaidya/volatility-surface
+configfile: pytest.ini
+testpaths: tests
+plugins: cov-7.0.0
+collected 142 items                                                                                                                                                                       
+
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_atm_call_price PASSED                                                                                     [  0%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_atm_put_price PASSED                                                                                      [  1%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_put_call_parity PASSED                                                                                    [  2%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_deep_itm_call PASSED                                                                                      [  2%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_deep_otm_call PASSED                                                                                      [  3%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_short_maturity_option PASSED                                                                              [  4%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_long_maturity_option PASSED                                                                               [  4%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_high_volatility_increases_price PASSED                                                                    [  5%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_low_volatility_decreases_price PASSED                                                                     [  6%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesPrice::test_invalid_option_type_raises_error PASSED                                                                   [  7%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesDelta::test_atm_call_delta PASSED                                                                                     [  7%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesDelta::test_atm_put_delta PASSED                                                                                      [  8%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesDelta::test_deep_itm_call_delta PASSED                                                                                [  9%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesDelta::test_deep_otm_call_delta PASSED                                                                                [  9%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesDelta::test_delta_bounds PASSED                                                                                       [ 10%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesGamma::test_atm_gamma_highest PASSED                                                                                  [ 11%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesGamma::test_gamma_positive PASSED                                                                                     [ 11%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesGamma::test_deep_options_low_gamma PASSED                                                                             [ 12%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesVega::test_vega_positive PASSED                                                                                       [ 13%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesVega::test_atm_vega_highest PASSED                                                                                    [ 14%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesVega::test_longer_maturity_higher_vega PASSED                                                                         [ 14%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesTheta::test_theta_negative PASSED                                                                                     [ 15%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesTheta::test_atm_theta_magnitude PASSED                                                                                [ 16%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesTheta::test_short_maturity_higher_theta PASSED                                                                        [ 16%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesIntegration::test_all_greeks_computed PASSED                                                                          [ 17%]
+tests/test_calculators/test_black_scholes.py::TestBlackScholesIntegration::test_greeks_across_strikes PASSED                                                                        [ 18%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorBasic::test_recover_known_volatility PASSED                                                                      [ 19%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorBasic::test_put_option_iv PASSED                                                                                 [ 19%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorEdgeCases::test_deep_itm_option PASSED                                                                           [ 20%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorEdgeCases::test_deep_otm_option PASSED                                                                           [ 21%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorEdgeCases::test_high_volatility PASSED                                                                           [ 21%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorEdgeCases::test_low_volatility PASSED                                                                            [ 22%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorEdgeCases::test_short_maturity PASSED                                                                            [ 23%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorValidation::test_invalid_spot_price PASSED                                                                       [ 23%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorValidation::test_invalid_strike_price PASSED                                                                     [ 24%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorValidation::test_invalid_time_to_expiry PASSED                                                                   [ 25%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorValidation::test_invalid_market_price PASSED                                                                     [ 26%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorValidation::test_invalid_option_type PASSED                                                                      [ 26%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorValidation::test_price_below_intrinsic_value PASSED                                                              [ 27%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorStatistics::test_statistics_tracking PASSED                                                                      [ 28%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorStatistics::test_statistics_reset PASSED                                                                         [ 28%]
+tests/test_calculators/test_implied_volatility.py::TestBSHelperFunctions::test_bs_call_price_function PASSED                                                                        [ 29%]
+tests/test_calculators/test_implied_volatility.py::TestBSHelperFunctions::test_bs_put_price_function PASSED                                                                         [ 30%]
+tests/test_calculators/test_implied_volatility.py::TestBSHelperFunctions::test_zero_time_to_expiry PASSED                                                                           [ 30%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorIntegration::test_iv_across_strike_range PASSED                                                                  [ 31%]
+tests/test_calculators/test_implied_volatility.py::TestIVCalculatorIntegration::test_iv_across_maturities PASSED                                                                    [ 32%]
+tests/test_config/test_config.py::TestMarketDataConfig::test_strike_range_defaults PASSED                                                                                           [ 33%]
+tests/test_config/test_config.py::TestMarketDataConfig::test_volume_defaults PASSED                                                                                                 [ 33%]
+tests/test_config/test_config.py::TestMarketDataConfig::test_expiry_defaults PASSED                                                                                                 [ 34%]
+tests/test_config/test_config.py::TestMarketDataConfig::test_quality_thresholds PASSED                                                                                              [ 35%]
+tests/test_config/test_config.py::TestModelConfig::test_rate_defaults PASSED                                                                                                        [ 35%]
+tests/test_config/test_config.py::TestModelConfig::test_rate_bounds PASSED                                                                                                          [ 36%]
+tests/test_config/test_config.py::TestModelConfig::test_rate_bounds_valid PASSED                                                                                                    [ 37%]
+tests/test_config/test_config.py::TestIVCalculationConfig::test_solver_bounds PASSED                                                                                                [ 38%]
+tests/test_config/test_config.py::TestIVCalculationConfig::test_convergence_tolerance PASSED                                                                                        [ 38%]
+tests/test_config/test_config.py::TestIVCalculationConfig::test_validation_thresholds PASSED                                                                                        [ 39%]
+tests/test_config/test_config.py::TestIVCalculationConfig::test_all_positive PASSED                                                                                                 [ 40%]
+tests/test_config/test_config.py::TestVisualizationConfig::test_mesh_resolution PASSED                                                                                              [ 40%]
+tests/test_config/test_config.py::TestVisualizationConfig::test_plot_dimensions PASSED                                                                                              [ 41%]
+tests/test_config/test_config.py::TestVisualizationConfig::test_camera_position PASSED                                                                                              [ 42%]
+tests/test_config/test_config.py::TestVisualizationConfig::test_lighting_parameters PASSED                                                                                          [ 42%]
+tests/test_config/test_config.py::TestVisualizationConfig::test_smile_slices PASSED                                                                                                 [ 43%]
+tests/test_config/test_config.py::TestStatisticsConfig::test_atm_definition PASSED                                                                                                  [ 44%]
+tests/test_config/test_config.py::TestStatisticsConfig::test_otm_definition PASSED                                                                                                  [ 45%]
+tests/test_config/test_config.py::TestStatisticsConfig::test_display_multiplier PASSED                                                                                              [ 45%]
+tests/test_config/test_config.py::TestUIConfig::test_default_ticker PASSED                                                                                                          [ 46%]
+tests/test_config/test_config.py::TestUIConfig::test_strike_bounds PASSED                                                                                                           [ 47%]
+tests/test_config/test_config.py::TestUIConfig::test_rate_input_bounds PASSED                                                                                                       [ 47%]
+tests/test_config/test_config.py::TestUIConfig::test_theme_options PASSED                                                                                                           [ 48%]
+tests/test_config/test_config.py::TestUIConfig::test_colormap_options PASSED                                                                                                        [ 49%]
+tests/test_config/test_config.py::TestUIConfig::test_cache_settings PASSED                                                                                                          [ 50%]
+tests/test_config/test_config.py::TestLoggingConfig::test_log_level PASSED                                                                                                          [ 50%]
+tests/test_config/test_config.py::TestLoggingConfig::test_log_formats PASSED                                                                                                        [ 51%]
+tests/test_config/test_config.py::TestConfigIntegration::test_get_all_configs PASSED                                                                                                [ 52%]
+tests/test_config/test_config.py::TestConfigIntegration::test_config_classes_accessible PASSED                                                                                      [ 52%]
+tests/test_config/test_config.py::TestConfigIntegration::test_no_config_conflicts PASSED                                                                                            [ 53%]
+tests/test_data/test_data.py::TestOptionDataFetcherInit::test_init_creates_instance PASSED                                                                                          [ 54%]
+tests/test_data/test_data.py::TestOptionDataFetcherInit::test_init_stores_symbol PASSED                                                                                             [ 54%]
+tests/test_data/test_data.py::TestFetchSpotPrice::test_fetch_spot_price_success PASSED                                                                                              [ 55%]
+tests/test_data/test_data.py::TestFetchSpotPrice::test_fetch_spot_price_empty_data PASSED                                                                                           [ 56%]
+tests/test_data/test_data.py::TestFetchSpotPrice::test_fetch_spot_price_negative_value PASSED                                                                                       [ 57%]
+tests/test_data/test_data.py::TestFetchExpirationDates::test_fetch_expiration_dates_success PASSED                                                                                  [ 57%]
+tests/test_data/test_data.py::TestFetchExpirationDates::test_fetch_expiration_filters_near_expiry PASSED                                                                            [ 58%]
+tests/test_data/test_data.py::TestFetchExpirationDates::test_fetch_expiration_no_dates PASSED                                                                                       [ 59%]
+tests/test_data/test_data.py::TestGetDividendYield::test_get_dividend_yield_success PASSED                                                                                          [ 59%]
+tests/test_data/test_data.py::TestGetDividendYield::test_get_dividend_yield_missing PASSED                                                                                          [ 60%]
+tests/test_data/test_data.py::TestGetDividendYield::test_get_dividend_yield_none PASSED                                                                                             [ 61%]
+tests/test_data/test_data.py::TestPrepareDataframe::test_prepare_dataframe_creates_dataframe PASSED                                                                                 [ 61%]
+tests/test_data/test_data.py::TestPrepareDataframe::test_prepare_dataframe_calculates_fields PASSED                                                                                 [ 62%]
+tests/test_data/test_data.py::TestLogDataQualityMetrics::test_log_quality_metrics_with_data PASSED                                                                                  [ 63%]
+tests/test_data/test_data.py::TestLogDataQualityMetrics::test_log_quality_metrics_empty_dataframe PASSED                                                                            [ 64%]
+tests/test_data/test_data.py::TestPrepareForIVIntegration::test_prepare_for_iv_full_workflow PASSED                                                                                 [ 64%]
+tests/test_data/test_data.py::TestPrepareForIVIntegration::test_prepare_for_iv_with_filters PASSED                                                                                  [ 65%]
+tests/test_data/test_data.py::TestErrorHandling::test_connection_error_handling PASSED                                                                                              [ 66%]
+tests/test_data/test_data.py::TestErrorHandling::test_invalid_ticker_handling PASSED                                                                                                [ 66%]
+tests/test_logger/test_logger.py::TestLoggerSetup::test_setup_logger_creates_logger PASSED                                                                                          [ 67%]
+tests/test_logger/test_logger.py::TestLoggerSetup::test_setup_logger_default_level PASSED                                                                                           [ 68%]
+tests/test_logger/test_logger.py::TestLoggerSetup::test_setup_logger_custom_level PASSED                                                                                            [ 69%]
+tests/test_logger/test_logger.py::TestLoggerSetup::test_setup_logger_has_handler PASSED                                                                                             [ 69%]
+tests/test_logger/test_logger.py::TestLoggerSetup::test_setup_logger_idempotent PASSED                                                                                              [ 70%]
+tests/test_logger/test_logger.py::TestLoggerSetup::test_logger_can_log PASSED                                                                                                       [ 71%]
+tests/test_logger/test_logger.py::TestSetLogLevel::test_set_log_level_changes_level PASSED                                                                                          [ 71%]
+tests/test_logger/test_logger.py::TestSetLogLevel::test_set_log_level_updates_handlers PASSED                                                                                       [ 72%]
+tests/test_logger/test_logger.py::TestSetLogLevel::test_set_log_level_all_levels PASSED                                                                                             [ 73%]
+tests/test_logger/test_logger.py::TestGetLogger::test_get_logger_returns_existing PASSED                                                                                            [ 73%]
+tests/test_logger/test_logger.py::TestGetLogger::test_get_logger_returns_none_for_nonexistent PASSED                                                                                [ 74%]
+tests/test_logger/test_logger.py::TestGetLogger::test_get_logger_without_handlers PASSED                                                                                            [ 75%]
+tests/test_logger/test_logger.py::TestLoggerIntegration::test_multiple_loggers_independent PASSED                                                                                   [ 76%]
+tests/test_logger/test_logger.py::TestLoggerIntegration::test_logger_hierarchy PASSED                                                                                               [ 76%]
+tests/test_logger/test_logger.py::TestLoggerIntegration::test_full_workflow PASSED                                                                                                  [ 77%]
+tests/test_logger/test_logger.py::TestLoggerFormatting::test_logger_has_formatter PASSED                                                                                            [ 78%]
+tests/test_logger/test_logger.py::TestLoggerFormatting::test_formatter_includes_timestamp PASSED                                                                                    [ 78%]
+tests/test_logger/test_logger.py::TestLoggerFormatting::test_formatter_includes_name PASSED                                                                                         [ 79%]
+tests/test_logger/test_logger.py::TestLoggerFormatting::test_formatter_includes_level PASSED                                                                                        [ 80%]
+tests/test_logger/test_logger.py::TestLoggerFormatting::test_formatter_includes_message PASSED                                                                                      [ 80%]
+tests/test_logger/test_logger.py::TestLoggerEdgeCases::test_setup_logger_empty_name FAILED                                                                                          [ 81%]
+tests/test_logger/test_logger.py::TestLoggerEdgeCases::test_setup_logger_special_characters PASSED                                                                                  [ 82%]
+tests/test_logger/test_logger.py::TestLoggerEdgeCases::test_set_log_level_invalid_level PASSED                                                                                      [ 83%]
+tests/test_logger/test_logger.py::TestLoggerEdgeCases::test_get_logger_case_sensitive PASSED                                                                                        [ 83%]
+tests/test_visualization/test_surface_plot.py::TestSurfaceData::test_surface_data_creation PASSED                                                                                   [ 84%]
+tests/test_visualization/test_surface_plot.py::TestSurfaceData::test_surface_data_default_y_axis PASSED                                                                             [ 85%]
+tests/test_visualization/test_surface_plot.py::TestSurfaceData::test_surface_data_moneyness_type PASSED                                                                             [ 85%]
+tests/test_visualization/test_surface_plot.py::TestSurfacePlotterInit::test_plotter_initialization FAILED                                                                           [ 86%]
+tests/test_visualization/test_surface_plot.py::TestSurfacePlotterInit::test_plotter_mesh_created FAILED                                                                             [ 87%]
+tests/test_visualization/test_surface_plot.py::TestPrepareMesh::test_prepare_mesh_creates_grid PASSED                                                                               [ 88%]
+tests/test_visualization/test_surface_plot.py::TestPrepareMesh::test_prepare_mesh_empty_data_raises PASSED                                                                          [ 88%]
+tests/test_visualization/test_surface_plot.py::TestPrepareMesh::test_prepare_mesh_interpolation PASSED                                                                              [ 89%]
+tests/test_visualization/test_surface_plot.py::TestCreateSurfacePlot::test_create_surface_returns_figure PASSED                                                                     [ 90%]
+tests/test_visualization/test_surface_plot.py::TestCreateSurfacePlot::test_create_surface_dark_theme PASSED                                                                         [ 90%]
+tests/test_visualization/test_surface_plot.py::TestCreateSurfacePlot::test_create_surface_light_theme PASSED                                                                        [ 91%]
+tests/test_visualization/test_surface_plot.py::TestCreateSurfacePlot::test_create_surface_different_colormaps PASSED                                                                [ 92%]
+tests/test_visualization/test_surface_plot.py::TestAddSmileSlices::test_add_smile_slices_returns_figure PASSED                                                                      [ 92%]
+tests/test_visualization/test_surface_plot.py::TestAddSmileSlices::test_add_smile_slices_custom_days PASSED                                                                         [ 93%]
+tests/test_visualization/test_surface_plot.py::TestAddSmileSlices::test_add_smile_slices_theme_colors PASSED                                                                        [ 94%]
+tests/test_visualization/test_surface_plot.py::TestColormapPresets::test_colormap_presets_exist PASSED                                                                              [ 95%]
+tests/test_visualization/test_surface_plot.py::TestColormapPresets::test_colormap_presets_valid_format PASSED                                                                       [ 95%]
+tests/test_visualization/test_surface_plot.py::TestSurfacePlotterIntegration::test_full_plotting_workflow PASSED                                                                    [ 96%]
+tests/test_visualization/test_surface_plot.py::TestSurfacePlotterIntegration::test_strike_vs_moneyness_plotting PASSED                                                              [ 97%]
+tests/test_visualization/test_surface_plot.py::TestSurfacePlotterIntegration::test_all_themes_and_colormaps PASSED                                                                  [ 97%]
+tests/test_visualization/test_surface_plot.py::TestEdgeCases::test_minimal_data_points FAILED                                                                                       [ 98%]
+tests/test_visualization/test_surface_plot.py::TestEdgeCases::test_high_volatility_values FAILED                                                                                    [ 99%]
+tests/test_visualization/test_surface_plot.py::TestEdgeCases::test_low_volatility_values FAILED                                                                                     [100%]
+
+======================================================================================== FAILURES =========================================================================================
+____________________________________________________________________ TestLoggerEdgeCases.test_setup_logger_empty_name _____________________________________________________________________
+tests/test_logger/test_logger.py:247: in test_setup_logger_empty_name
+    assert logger.name == ''
+E   AssertionError: assert 'root' == ''
+E     
+E     + root
+___________________________________________________________________ TestSurfacePlotterInit.test_plotter_initialization ____________________________________________________________________
+tests/test_visualization/test_surface_plot.py:72: in test_plotter_initialization
+    plotter = SurfacePlotter(data)
+src/visualization/surface_plot.py:84: in __init__
+    self._prepare_mesh()
+src/visualization/surface_plot.py:111: in _prepare_mesh
+    self.vol_mesh = griddata(
+venv/lib/python3.9/site-packages/scipy/interpolate/_ndgriddata.py:323: in griddata
+    ip = LinearNDInterpolator(points, values, fill_value=fill_value,
+interpnd.pyx:326: in scipy.interpolate.interpnd.LinearNDInterpolator.__init__
+    ???
+interpnd.pyx:92: in scipy.interpolate.interpnd.NDInterpolatorBase.__init__
+    ???
+interpnd.pyx:330: in scipy.interpolate.interpnd.LinearNDInterpolator._calculate_triangulation
+    ???
+_qhull.pyx:1821: in scipy.spatial._qhull.Delaunay.__init__
+    ???
+_qhull.pyx:343: in scipy.spatial._qhull._Qhull.__init__
+    ???
+E   scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+E   
+E   While executing:  | qhull d Qt Qc Q12 Qbb Qz
+E   Options selected for Qhull 2019.1.r 2019/06/21:
+E     run-id 839958380  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+E     Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+E     Pgood  _max-width 40  Error-roundoff 1.7e-13  _one-merge 1.2e-12
+E     Visible-distance 3.3e-13  U-max-coplanar 3.3e-13  Width-outside 6.7e-13
+E     _wide-facet 2e-12  _maxoutside 1.3e-12
+E   
+E   The input to qhull appears to be less than 3 dimensional, or a
+E   computation has overflowed.
+E   
+E   Qhull could not construct a clearly convex simplex from points:
+E   - p4(v4):   0.1    98    40
+E   - p9(v3):   0.1 1.2e+02 1e+02
+E   - p0(v2):   0.1    80 -5.2e-15
+E   - p10(v1):   0.1 1e+02 1.2e+02
+E   
+E   The center point is coplanar with a facet, or a vertex is coplanar
+E   with a neighboring facet.  The maximum round off error for
+E   computing distances is 1.7e-13.  The center point, facets and distances
+E   to the center point are as follows:
+E   
+E   center point      0.1    99.44    65.47
+E   
+E   facet p9 p0 p10 distance= 4e-18
+E   facet p4 p0 p10 distance= 1.8e-18
+E   facet p4 p9 p10 distance= -2.1e-18
+E   facet p4 p9 p0 distance=    0
+E   
+E   These points either have a maximum or minimum x-coordinate, or
+E   they maximize the determinant for k coordinates.  Trial points
+E   are first selected from points that maximize a coordinate.
+E   
+E   The min and max coordinates for each dimension are:
+E     0:       0.1       0.1  difference= 1.388e-17
+E     1:        80       120  difference=   40
+E     2:  -5.154e-15       120  difference=  120
+E   
+E   If the input should be full dimensional, you have several options that
+E   may determine an initial simplex:
+E     - use 'QJ'  to joggle the input and make it full dimensional
+E     - use 'QbB' to scale the points to the unit cube
+E     - use 'QR0' to randomly rotate the input for different maximum points
+E     - use 'Qs'  to search all points for the initial simplex
+E     - use 'En'  to specify a maximum roundoff error less than 1.7e-13.
+E     - trace execution with 'T3' to see the determinant for each point.
+E   
+E   If the input is lower dimensional:
+E     - use 'QJ' to joggle the input and make it full dimensional
+E     - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+E       pick the coordinate with the least range.  The hull will have the
+E       correct topology.
+E     - determine the flat containing the points, rotate the points
+E       into a coordinate plane, and delete the other coordinates.
+E     - add one or more points to make the input full dimensional.
+____________________________________________________________________ TestSurfacePlotterInit.test_plotter_mesh_created _____________________________________________________________________
+tests/test_visualization/test_surface_plot.py:89: in test_plotter_mesh_created
+    plotter = SurfacePlotter(data)
+src/visualization/surface_plot.py:84: in __init__
+    self._prepare_mesh()
+src/visualization/surface_plot.py:111: in _prepare_mesh
+    self.vol_mesh = griddata(
+venv/lib/python3.9/site-packages/scipy/interpolate/_ndgriddata.py:323: in griddata
+    ip = LinearNDInterpolator(points, values, fill_value=fill_value,
+interpnd.pyx:326: in scipy.interpolate.interpnd.LinearNDInterpolator.__init__
+    ???
+interpnd.pyx:92: in scipy.interpolate.interpnd.NDInterpolatorBase.__init__
+    ???
+interpnd.pyx:330: in scipy.interpolate.interpnd.LinearNDInterpolator._calculate_triangulation
+    ???
+_qhull.pyx:1821: in scipy.spatial._qhull.Delaunay.__init__
+    ???
+_qhull.pyx:343: in scipy.spatial._qhull._Qhull.__init__
+    ???
+E   scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+E   
+E   While executing:  | qhull d Qt Qc Q12 Qbb Qz
+E   Options selected for Qhull 2019.1.r 2019/06/21:
+E     run-id 839958380  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+E     Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+E     Pgood  _max-width 40  Error-roundoff 1.7e-13  _one-merge 1.2e-12
+E     Visible-distance 3.3e-13  U-max-coplanar 3.3e-13  Width-outside 6.7e-13
+E     _wide-facet 2e-12  _maxoutside 1.3e-12
+E   
+E   The input to qhull appears to be less than 3 dimensional, or a
+E   computation has overflowed.
+E   
+E   Qhull could not construct a clearly convex simplex from points:
+E   - p4(v4):   0.1    98    40
+E   - p9(v3):   0.1 1.2e+02 1e+02
+E   - p0(v2):   0.1    80 -5.2e-15
+E   - p10(v1):   0.1 1e+02 1.2e+02
+E   
+E   The center point is coplanar with a facet, or a vertex is coplanar
+E   with a neighboring facet.  The maximum round off error for
+E   computing distances is 1.7e-13.  The center point, facets and distances
+E   to the center point are as follows:
+E   
+E   center point      0.1    99.44    65.47
+E   
+E   facet p9 p0 p10 distance= 4e-18
+E   facet p4 p0 p10 distance= 1.8e-18
+E   facet p4 p9 p10 distance= -2.1e-18
+E   facet p4 p9 p0 distance=    0
+E   
+E   These points either have a maximum or minimum x-coordinate, or
+E   they maximize the determinant for k coordinates.  Trial points
+E   are first selected from points that maximize a coordinate.
+E   
+E   The min and max coordinates for each dimension are:
+E     0:       0.1       0.1  difference= 1.388e-17
+E     1:        80       120  difference=   40
+E     2:  -5.154e-15       120  difference=  120
+E   
+E   If the input should be full dimensional, you have several options that
+E   may determine an initial simplex:
+E     - use 'QJ'  to joggle the input and make it full dimensional
+E     - use 'QbB' to scale the points to the unit cube
+E     - use 'QR0' to randomly rotate the input for different maximum points
+E     - use 'Qs'  to search all points for the initial simplex
+E     - use 'En'  to specify a maximum roundoff error less than 1.7e-13.
+E     - trace execution with 'T3' to see the determinant for each point.
+E   
+E   If the input is lower dimensional:
+E     - use 'QJ' to joggle the input and make it full dimensional
+E     - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+E       pick the coordinate with the least range.  The hull will have the
+E       correct topology.
+E     - determine the flat containing the points, rotate the points
+E       into a coordinate plane, and delete the other coordinates.
+E     - add one or more points to make the input full dimensional.
+_________________________________________________________________________ TestEdgeCases.test_minimal_data_points __________________________________________________________________________
+tests/test_visualization/test_surface_plot.py:400: in test_minimal_data_points
+    plotter = SurfacePlotter(data)
+src/visualization/surface_plot.py:84: in __init__
+    self._prepare_mesh()
+src/visualization/surface_plot.py:111: in _prepare_mesh
+    self.vol_mesh = griddata(
+venv/lib/python3.9/site-packages/scipy/interpolate/_ndgriddata.py:323: in griddata
+    ip = LinearNDInterpolator(points, values, fill_value=fill_value,
+interpnd.pyx:326: in scipy.interpolate.interpnd.LinearNDInterpolator.__init__
+    ???
+interpnd.pyx:92: in scipy.interpolate.interpnd.NDInterpolatorBase.__init__
+    ???
+interpnd.pyx:330: in scipy.interpolate.interpnd.LinearNDInterpolator._calculate_triangulation
+    ???
+_qhull.pyx:1821: in scipy.spatial._qhull.Delaunay.__init__
+    ???
+_qhull.pyx:343: in scipy.spatial._qhull._Qhull.__init__
+    ???
+E   scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+E   
+E   While executing:  | qhull d Qt Qc Q12 Qbb Qz
+E   Options selected for Qhull 2019.1.r 2019/06/21:
+E     run-id 839958380  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+E     Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+E     Pgood  _max-width 10  Error-roundoff 1.5e-13  _one-merge 1e-12
+E     Visible-distance 2.9e-13  U-max-coplanar 2.9e-13  Width-outside 5.8e-13
+E     _wide-facet 1.7e-12  _maxoutside 1.2e-12
+E   
+E   The input to qhull appears to be less than 3 dimensional, or a
+E   computation has overflowed.
+E   
+E   Qhull could not construct a clearly convex simplex from points:
+E   - p1(v4):     1 1e+02    33
+E   - p3(v3):     1 1e+02 1.0e+02
+E   - p2(v2):   1.5 1.0e+02    68
+E   - p0(v1):   0.5    95 2.5e-15
+E   
+E   The center point is coplanar with a facet, or a vertex is coplanar
+E   with a neighboring facet.  The maximum round off error for
+E   computing distances is 1.5e-13.  The center point, facets and distances
+E   to the center point are as follows:
+E   
+E   center point        1      100    51.43
+E   
+E   facet p3 p2 p0 distance= 2.8e-16
+E   facet p1 p2 p0 distance= 6.7e-16
+E   facet p1 p3 p0 distance= 1.5e-15
+E   facet p1 p3 p2 distance= 1.5e-15
+E   
+E   These points either have a maximum or minimum x-coordinate, or
+E   they maximize the determinant for k coordinates.  Trial points
+E   are first selected from points that maximize a coordinate.
+E   
+E   The min and max coordinates for each dimension are:
+E     0:       0.5       1.5  difference=    1
+E     1:        95       105  difference=   10
+E     2:  2.51e-15       105  difference=  105
+E   
+E   If the input should be full dimensional, you have several options that
+E   may determine an initial simplex:
+E     - use 'QJ'  to joggle the input and make it full dimensional
+E     - use 'QbB' to scale the points to the unit cube
+E     - use 'QR0' to randomly rotate the input for different maximum points
+E     - use 'Qs'  to search all points for the initial simplex
+E     - use 'En'  to specify a maximum roundoff error less than 1.5e-13.
+E     - trace execution with 'T3' to see the determinant for each point.
+E   
+E   If the input is lower dimensional:
+E     - use 'QJ' to joggle the input and make it full dimensional
+E     - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+E       pick the coordinate with the least range.  The hull will have the
+E       correct topology.
+E     - determine the flat containing the points, rotate the points
+E       into a coordinate plane, and delete the other coordinates.
+E     - add one or more points to make the input full dimensional.
+________________________________________________________________________ TestEdgeCases.test_high_volatility_values ________________________________________________________________________
+tests/test_visualization/test_surface_plot.py:415: in test_high_volatility_values
+    plotter = SurfacePlotter(data)
+src/visualization/surface_plot.py:84: in __init__
+    self._prepare_mesh()
+src/visualization/surface_plot.py:111: in _prepare_mesh
+    self.vol_mesh = griddata(
+venv/lib/python3.9/site-packages/scipy/interpolate/_ndgriddata.py:323: in griddata
+    ip = LinearNDInterpolator(points, values, fill_value=fill_value,
+interpnd.pyx:326: in scipy.interpolate.interpnd.LinearNDInterpolator.__init__
+    ???
+interpnd.pyx:92: in scipy.interpolate.interpnd.NDInterpolatorBase.__init__
+    ???
+interpnd.pyx:330: in scipy.interpolate.interpnd.LinearNDInterpolator._calculate_triangulation
+    ???
+_qhull.pyx:1821: in scipy.spatial._qhull.Delaunay.__init__
+    ???
+_qhull.pyx:343: in scipy.spatial._qhull._Qhull.__init__
+    ???
+E   scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+E   
+E   While executing:  | qhull d Qt Qc Q12 Qbb Qz
+E   Options selected for Qhull 2019.1.r 2019/06/21:
+E     run-id 839975187  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+E     Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+E     Pgood  _max-width 20  Error-roundoff 1.5e-13  _one-merge 1.1e-12
+E     Visible-distance 3.1e-13  U-max-coplanar 3.1e-13  Width-outside 6.1e-13
+E     _wide-facet 1.8e-12  _maxoutside 1.2e-12
+E   
+E   The input to qhull appears to be less than 3 dimensional, or a
+E   computation has overflowed.
+E   
+E   Qhull could not construct a clearly convex simplex from points:
+E   - p1(v4):     1 1e+02    40
+E   - p3(v3):     1 1e+02 1.1e+02
+E   - p2(v2):   1.5 1.1e+02    84
+E   - p0(v1):   0.5    90 4.4e-16
+E   
+E   The center point is coplanar with a facet, or a vertex is coplanar
+E   with a neighboring facet.  The maximum round off error for
+E   computing distances is 1.5e-13.  The center point, facets and distances
+E   to the center point are as follows:
+E   
+E   center point        1      100    58.64
+E   
+E   facet p3 p2 p0 distance= 3.3e-16
+E   facet p1 p2 p0 distance= 3.3e-16
+E   facet p1 p3 p0 distance= -3.3e-16
+E   facet p1 p3 p2 distance= -3.3e-16
+E   
+E   These points either have a maximum or minimum x-coordinate, or
+E   they maximize the determinant for k coordinates.  Trial points
+E   are first selected from points that maximize a coordinate.
+E   
+E   The min and max coordinates for each dimension are:
+E     0:       0.5       1.5  difference=    1
+E     1:        90       110  difference=   20
+E     2:  4.398e-16       110  difference=  110
+E   
+E   If the input should be full dimensional, you have several options that
+E   may determine an initial simplex:
+E     - use 'QJ'  to joggle the input and make it full dimensional
+E     - use 'QbB' to scale the points to the unit cube
+E     - use 'QR0' to randomly rotate the input for different maximum points
+E     - use 'Qs'  to search all points for the initial simplex
+E     - use 'En'  to specify a maximum roundoff error less than 1.5e-13.
+E     - trace execution with 'T3' to see the determinant for each point.
+E   
+E   If the input is lower dimensional:
+E     - use 'QJ' to joggle the input and make it full dimensional
+E     - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+E       pick the coordinate with the least range.  The hull will have the
+E       correct topology.
+E     - determine the flat containing the points, rotate the points
+E       into a coordinate plane, and delete the other coordinates.
+E     - add one or more points to make the input full dimensional.
+________________________________________________________________________ TestEdgeCases.test_low_volatility_values _________________________________________________________________________
+tests/test_visualization/test_surface_plot.py:430: in test_low_volatility_values
+    plotter = SurfacePlotter(data)
+src/visualization/surface_plot.py:84: in __init__
+    self._prepare_mesh()
+src/visualization/surface_plot.py:111: in _prepare_mesh
+    self.vol_mesh = griddata(
+venv/lib/python3.9/site-packages/scipy/interpolate/_ndgriddata.py:323: in griddata
+    ip = LinearNDInterpolator(points, values, fill_value=fill_value,
+interpnd.pyx:326: in scipy.interpolate.interpnd.LinearNDInterpolator.__init__
+    ???
+interpnd.pyx:92: in scipy.interpolate.interpnd.NDInterpolatorBase.__init__
+    ???
+interpnd.pyx:330: in scipy.interpolate.interpnd.LinearNDInterpolator._calculate_triangulation
+    ???
+_qhull.pyx:1821: in scipy.spatial._qhull.Delaunay.__init__
+    ???
+_qhull.pyx:343: in scipy.spatial._qhull._Qhull.__init__
+    ???
+E   scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+E   
+E   While executing:  | qhull d Qt Qc Q12 Qbb Qz
+E   Options selected for Qhull 2019.1.r 2019/06/21:
+E     run-id 839975187  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+E     Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+E     Pgood  _max-width 20  Error-roundoff 1.5e-13  _one-merge 1.1e-12
+E     Visible-distance 3.1e-13  U-max-coplanar 3.1e-13  Width-outside 6.1e-13
+E     _wide-facet 1.8e-12  _maxoutside 1.2e-12
+E   
+E   The input to qhull appears to be less than 3 dimensional, or a
+E   computation has overflowed.
+E   
+E   Qhull could not construct a clearly convex simplex from points:
+E   - p1(v4):     1 1e+02    40
+E   - p3(v3):     1 1e+02 1.1e+02
+E   - p2(v2):   1.5 1.1e+02    84
+E   - p0(v1):   0.5    90 4.4e-16
+E   
+E   The center point is coplanar with a facet, or a vertex is coplanar
+E   with a neighboring facet.  The maximum round off error for
+E   computing distances is 1.5e-13.  The center point, facets and distances
+E   to the center point are as follows:
+E   
+E   center point        1      100    58.64
+E   
+E   facet p3 p2 p0 distance= 3.3e-16
+E   facet p1 p2 p0 distance= 3.3e-16
+E   facet p1 p3 p0 distance= -3.3e-16
+E   facet p1 p3 p2 distance= -3.3e-16
+E   
+E   These points either have a maximum or minimum x-coordinate, or
+E   they maximize the determinant for k coordinates.  Trial points
+E   are first selected from points that maximize a coordinate.
+E   
+E   The min and max coordinates for each dimension are:
+E     0:       0.5       1.5  difference=    1
+E     1:        90       110  difference=   20
+E     2:  4.398e-16       110  difference=  110
+E   
+E   If the input should be full dimensional, you have several options that
+E   may determine an initial simplex:
+E     - use 'QJ'  to joggle the input and make it full dimensional
+E     - use 'QbB' to scale the points to the unit cube
+E     - use 'QR0' to randomly rotate the input for different maximum points
+E     - use 'Qs'  to search all points for the initial simplex
+E     - use 'En'  to specify a maximum roundoff error less than 1.5e-13.
+E     - trace execution with 'T3' to see the determinant for each point.
+E   
+E   If the input is lower dimensional:
+E     - use 'QJ' to joggle the input and make it full dimensional
+E     - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+E       pick the coordinate with the least range.  The hull will have the
+E       correct topology.
+E     - determine the flat containing the points, rotate the points
+E       into a coordinate plane, and delete the other coordinates.
+E     - add one or more points to make the input full dimensional.
+===================================================================================== tests coverage ======================================================================================
+____________________________________________________________________ coverage: platform darwin, python 3.9.12-final-0 _____________________________________________________________________
+
+Name                                    Stmts   Miss Branch BrPart  Cover   Missing
+-----------------------------------------------------------------------------------
+src/__init__.py                             0      0      0      0   100%
+src/calculators/__init__.py                 0      0      0      0   100%
+src/calculators/black_scholes.py           47      0      8      0   100%
+src/calculators/implied_volatility.py      80     10     26      2    89%   147-159, 190, 192
+src/config/__init__.py                      0      0      0      0   100%
+src/config/config.py                       67      0      0      0   100%
+src/data/__init__.py                        0      0      0      0   100%
+src/data/market_data.py                   100     13     20      4    86%   85, 102-104, 162, 208->204, 220-223, 226, 289-291
+src/utils/__init__.py                       0      0      0      0   100%
+src/utils/logger.py                        21      0      4      0   100%
+src/visualization/__init__.py               0      0      0      0   100%
+src/visualization/surface_plot.py          53      0     12      1    98%   257->252
+-----------------------------------------------------------------------------------
+TOTAL                                     368     23     70      7    93%
+Coverage HTML written to dir htmlcov
+================================================================================= short test summary info =================================================================================
+FAILED tests/test_logger/test_logger.py::TestLoggerEdgeCases::test_setup_logger_empty_name - AssertionError: assert 'root' == ''
+  
+  + root
+FAILED tests/test_visualization/test_surface_plot.py::TestSurfacePlotterInit::test_plotter_initialization - scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+
+While executing:  | qhull d Qt Qc Q12 Qbb Qz
+Options selected for Qhull 2019.1.r 2019/06/21:
+  run-id 839958380  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+  Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+  Pgood  _max-width 40  Error-roundoff 1.7e-13  _one-merge 1.2e-12
+  Visible-distance 3.3e-13  U-max-coplanar 3.3e-13  Width-outside 6.7e-13
+  _wide-facet 2e-12  _maxoutside 1.3e-12
+
+The input to qhull appears to be less than 3 dimensional, or a
+computation has overflowed.
+
+Qhull could not construct a clearly convex simplex from points:
+- p4(v4):   0.1    98    40
+- p9(v3):   0.1 1.2e+02 1e+02
+- p0(v2):   0.1    80 -5.2e-15
+- p10(v1):   0.1 1e+02 1.2e+02
+
+The center point is coplanar with a facet, or a vertex is coplanar
+with a neighboring facet.  The maximum round off error for
+computing distances is 1.7e-13.  The center point, facets and distances
+to the center point are as follows:
+
+center point      0.1    99.44    65.47
+
+facet p9 p0 p10 distance= 4e-18
+facet p4 p0 p10 distance= 1.8e-18
+facet p4 p9 p10 distance= -2.1e-18
+facet p4 p9 p0 distance=    0
+
+These points either have a maximum or minimum x-coordinate, or
+they maximize the determinant for k coordinates.  Trial points
+are first selected from points that maximize a coordinate.
+
+The min and max coordinates for each dimension are:
+  0:       0.1       0.1  difference= 1.388e-17
+  1:        80       120  difference=   40
+  2:  -5.154e-15       120  difference=  120
+
+If the input should be full dimensional, you have several options that
+may determine an initial simplex:
+  - use 'QJ'  to joggle the input and make it full dimensional
+  - use 'QbB' to scale the points to the unit cube
+  - use 'QR0' to randomly rotate the input for different maximum points
+  - use 'Qs'  to search all points for the initial simplex
+  - use 'En'  to specify a maximum roundoff error less than 1.7e-13.
+  - trace execution with 'T3' to see the determinant for each point.
+
+If the input is lower dimensional:
+  - use 'QJ' to joggle the input and make it full dimensional
+  - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+    pick the coordinate with the least range.  The hull will have the
+    correct topology.
+  - determine the flat containing the points, rotate the points
+    into a coordinate plane, and delete the other coordinates.
+  - add one or more points to make the input full dimensional.
+FAILED tests/test_visualization/test_surface_plot.py::TestSurfacePlotterInit::test_plotter_mesh_created - scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+
+While executing:  | qhull d Qt Qc Q12 Qbb Qz
+Options selected for Qhull 2019.1.r 2019/06/21:
+  run-id 839958380  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+  Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+  Pgood  _max-width 40  Error-roundoff 1.7e-13  _one-merge 1.2e-12
+  Visible-distance 3.3e-13  U-max-coplanar 3.3e-13  Width-outside 6.7e-13
+  _wide-facet 2e-12  _maxoutside 1.3e-12
+
+The input to qhull appears to be less than 3 dimensional, or a
+computation has overflowed.
+
+Qhull could not construct a clearly convex simplex from points:
+- p4(v4):   0.1    98    40
+- p9(v3):   0.1 1.2e+02 1e+02
+- p0(v2):   0.1    80 -5.2e-15
+- p10(v1):   0.1 1e+02 1.2e+02
+
+The center point is coplanar with a facet, or a vertex is coplanar
+with a neighboring facet.  The maximum round off error for
+computing distances is 1.7e-13.  The center point, facets and distances
+to the center point are as follows:
+
+center point      0.1    99.44    65.47
+
+facet p9 p0 p10 distance= 4e-18
+facet p4 p0 p10 distance= 1.8e-18
+facet p4 p9 p10 distance= -2.1e-18
+facet p4 p9 p0 distance=    0
+
+These points either have a maximum or minimum x-coordinate, or
+they maximize the determinant for k coordinates.  Trial points
+are first selected from points that maximize a coordinate.
+
+The min and max coordinates for each dimension are:
+  0:       0.1       0.1  difference= 1.388e-17
+  1:        80       120  difference=   40
+  2:  -5.154e-15       120  difference=  120
+
+If the input should be full dimensional, you have several options that
+may determine an initial simplex:
+  - use 'QJ'  to joggle the input and make it full dimensional
+  - use 'QbB' to scale the points to the unit cube
+  - use 'QR0' to randomly rotate the input for different maximum points
+  - use 'Qs'  to search all points for the initial simplex
+  - use 'En'  to specify a maximum roundoff error less than 1.7e-13.
+  - trace execution with 'T3' to see the determinant for each point.
+
+If the input is lower dimensional:
+  - use 'QJ' to joggle the input and make it full dimensional
+  - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+    pick the coordinate with the least range.  The hull will have the
+    correct topology.
+  - determine the flat containing the points, rotate the points
+    into a coordinate plane, and delete the other coordinates.
+  - add one or more points to make the input full dimensional.
+FAILED tests/test_visualization/test_surface_plot.py::TestEdgeCases::test_minimal_data_points - scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+
+While executing:  | qhull d Qt Qc Q12 Qbb Qz
+Options selected for Qhull 2019.1.r 2019/06/21:
+  run-id 839958380  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+  Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+  Pgood  _max-width 10  Error-roundoff 1.5e-13  _one-merge 1e-12
+  Visible-distance 2.9e-13  U-max-coplanar 2.9e-13  Width-outside 5.8e-13
+  _wide-facet 1.7e-12  _maxoutside 1.2e-12
+
+The input to qhull appears to be less than 3 dimensional, or a
+computation has overflowed.
+
+Qhull could not construct a clearly convex simplex from points:
+- p1(v4):     1 1e+02    33
+- p3(v3):     1 1e+02 1.0e+02
+- p2(v2):   1.5 1.0e+02    68
+- p0(v1):   0.5    95 2.5e-15
+
+The center point is coplanar with a facet, or a vertex is coplanar
+with a neighboring facet.  The maximum round off error for
+computing distances is 1.5e-13.  The center point, facets and distances
+to the center point are as follows:
+
+center point        1      100    51.43
+
+facet p3 p2 p0 distance= 2.8e-16
+facet p1 p2 p0 distance= 6.7e-16
+facet p1 p3 p0 distance= 1.5e-15
+facet p1 p3 p2 distance= 1.5e-15
+
+These points either have a maximum or minimum x-coordinate, or
+they maximize the determinant for k coordinates.  Trial points
+are first selected from points that maximize a coordinate.
+
+The min and max coordinates for each dimension are:
+  0:       0.5       1.5  difference=    1
+  1:        95       105  difference=   10
+  2:  2.51e-15       105  difference=  105
+
+If the input should be full dimensional, you have several options that
+may determine an initial simplex:
+  - use 'QJ'  to joggle the input and make it full dimensional
+  - use 'QbB' to scale the points to the unit cube
+  - use 'QR0' to randomly rotate the input for different maximum points
+  - use 'Qs'  to search all points for the initial simplex
+  - use 'En'  to specify a maximum roundoff error less than 1.5e-13.
+  - trace execution with 'T3' to see the determinant for each point.
+
+If the input is lower dimensional:
+  - use 'QJ' to joggle the input and make it full dimensional
+  - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+    pick the coordinate with the least range.  The hull will have the
+    correct topology.
+  - determine the flat containing the points, rotate the points
+    into a coordinate plane, and delete the other coordinates.
+  - add one or more points to make the input full dimensional.
+FAILED tests/test_visualization/test_surface_plot.py::TestEdgeCases::test_high_volatility_values - scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+
+While executing:  | qhull d Qt Qc Q12 Qbb Qz
+Options selected for Qhull 2019.1.r 2019/06/21:
+  run-id 839975187  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+  Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+  Pgood  _max-width 20  Error-roundoff 1.5e-13  _one-merge 1.1e-12
+  Visible-distance 3.1e-13  U-max-coplanar 3.1e-13  Width-outside 6.1e-13
+  _wide-facet 1.8e-12  _maxoutside 1.2e-12
+
+The input to qhull appears to be less than 3 dimensional, or a
+computation has overflowed.
+
+Qhull could not construct a clearly convex simplex from points:
+- p1(v4):     1 1e+02    40
+- p3(v3):     1 1e+02 1.1e+02
+- p2(v2):   1.5 1.1e+02    84
+- p0(v1):   0.5    90 4.4e-16
+
+The center point is coplanar with a facet, or a vertex is coplanar
+with a neighboring facet.  The maximum round off error for
+computing distances is 1.5e-13.  The center point, facets and distances
+to the center point are as follows:
+
+center point        1      100    58.64
+
+facet p3 p2 p0 distance= 3.3e-16
+facet p1 p2 p0 distance= 3.3e-16
+facet p1 p3 p0 distance= -3.3e-16
+facet p1 p3 p2 distance= -3.3e-16
+
+These points either have a maximum or minimum x-coordinate, or
+they maximize the determinant for k coordinates.  Trial points
+are first selected from points that maximize a coordinate.
+
+The min and max coordinates for each dimension are:
+  0:       0.5       1.5  difference=    1
+  1:        90       110  difference=   20
+  2:  4.398e-16       110  difference=  110
+
+If the input should be full dimensional, you have several options that
+may determine an initial simplex:
+  - use 'QJ'  to joggle the input and make it full dimensional
+  - use 'QbB' to scale the points to the unit cube
+  - use 'QR0' to randomly rotate the input for different maximum points
+  - use 'Qs'  to search all points for the initial simplex
+  - use 'En'  to specify a maximum roundoff error less than 1.5e-13.
+  - trace execution with 'T3' to see the determinant for each point.
+
+If the input is lower dimensional:
+  - use 'QJ' to joggle the input and make it full dimensional
+  - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+    pick the coordinate with the least range.  The hull will have the
+    correct topology.
+  - determine the flat containing the points, rotate the points
+    into a coordinate plane, and delete the other coordinates.
+  - add one or more points to make the input full dimensional.
+FAILED tests/test_visualization/test_surface_plot.py::TestEdgeCases::test_low_volatility_values - scipy.spatial._qhull.QhullError: QH6154 Qhull precision error: Initial simplex is flat (facet 1 is coplanar with the interior point)
+
+While executing:  | qhull d Qt Qc Q12 Qbb Qz
+Options selected for Qhull 2019.1.r 2019/06/21:
+  run-id 839975187  delaunay  Qtriangulate  Qcoplanar-keep  Q12-allow-wide
+  Qbbound-last  Qz-infinity-point  _pre-merge  _zero-centrum  Qinterior-keep
+  Pgood  _max-width 20  Error-roundoff 1.5e-13  _one-merge 1.1e-12
+  Visible-distance 3.1e-13  U-max-coplanar 3.1e-13  Width-outside 6.1e-13
+  _wide-facet 1.8e-12  _maxoutside 1.2e-12
+
+The input to qhull appears to be less than 3 dimensional, or a
+computation has overflowed.
+
+Qhull could not construct a clearly convex simplex from points:
+- p1(v4):     1 1e+02    40
+- p3(v3):     1 1e+02 1.1e+02
+- p2(v2):   1.5 1.1e+02    84
+- p0(v1):   0.5    90 4.4e-16
+
+The center point is coplanar with a facet, or a vertex is coplanar
+with a neighboring facet.  The maximum round off error for
+computing distances is 1.5e-13.  The center point, facets and distances
+to the center point are as follows:
+
+center point        1      100    58.64
+
+facet p3 p2 p0 distance= 3.3e-16
+facet p1 p2 p0 distance= 3.3e-16
+facet p1 p3 p0 distance= -3.3e-16
+facet p1 p3 p2 distance= -3.3e-16
+
+These points either have a maximum or minimum x-coordinate, or
+they maximize the determinant for k coordinates.  Trial points
+are first selected from points that maximize a coordinate.
+
+The min and max coordinates for each dimension are:
+  0:       0.5       1.5  difference=    1
+  1:        90       110  difference=   20
+  2:  4.398e-16       110  difference=  110
+
+If the input should be full dimensional, you have several options that
+may determine an initial simplex:
+  - use 'QJ'  to joggle the input and make it full dimensional
+  - use 'QbB' to scale the points to the unit cube
+  - use 'QR0' to randomly rotate the input for different maximum points
+  - use 'Qs'  to search all points for the initial simplex
+  - use 'En'  to specify a maximum roundoff error less than 1.5e-13.
+  - trace execution with 'T3' to see the determinant for each point.
+
+If the input is lower dimensional:
+  - use 'QJ' to joggle the input and make it full dimensional
+  - use 'Qbk:0Bk:0' to delete coordinate k from the input.  You should
+    pick the coordinate with the least range.  The hull will have the
+    correct topology.
+  - determine the flat containing the points, rotate the points
+    into a coordinate plane, and delete the other coordinates.
+  - add one or more points to make the input full dimensional.
+============================================================================== 6 failed, 136 passed in 2.60s ==============================================================================
+
+================================================================================
+❌ Some tests failed
+   Exit code: 1
