@@ -128,6 +128,10 @@ def calculate_iv_statistics(valid_options: List[Dict[str, Any]], ivs: List[float
             - atm_iv: At-the-money implied volatility (%)
             - iv_skew: IV skew (OTM put - OTM call, %)
             - term_structure: Term structure (long - short ATM IV, %)
+            - iv_min: Minimum IV across surface (%)
+            - iv_max: Maximum IV across surface (%)
+            - avg_iv: Average IV across surface (%)
+            - iv_std: Standard deviation of IV (%)
             
     Example:
         >>> stats = calculate_iv_statistics(valid_opts, ivs, 100.0)
@@ -137,7 +141,11 @@ def calculate_iv_statistics(valid_options: List[Dict[str, Any]], ivs: List[float
         return {
             'atm_iv': 0.0,
             'iv_skew': None,
-            'term_structure': 0.0
+            'term_structure': 0.0,
+            'iv_min': 0.0,
+            'iv_max': 0.0,
+            'avg_iv': 0.0,
+            'iv_std': 0.0
         }
     
     df = pd.DataFrame({
@@ -176,10 +184,21 @@ def calculate_iv_statistics(valid_options: List[Dict[str, Any]], ivs: List[float
     else:
         term_structure = 0.0
     
+    # Surface statistics
+    iv_array = np.array(ivs)
+    iv_min = np.min(iv_array)
+    iv_max = np.max(iv_array)
+    avg_iv = np.mean(iv_array)
+    iv_std = np.std(iv_array)
+    
     return {
         'atm_iv': atm_iv * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
         'iv_skew': skew * StatisticsConfig.IV_DISPLAY_MULTIPLIER if skew is not None else None,
-        'term_structure': term_structure * StatisticsConfig.IV_DISPLAY_MULTIPLIER
+        'term_structure': term_structure * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
+        'iv_min': iv_min * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
+        'iv_max': iv_max * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
+        'avg_iv': avg_iv * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
+        'iv_std': iv_std * StatisticsConfig.IV_DISPLAY_MULTIPLIER
     }
 
 def main() -> None:
@@ -194,7 +213,7 @@ def main() -> None:
     """
     st.set_page_config(
         page_title="IV Surface Analysis",
-        page_icon="📊",
+        page_icon="■",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -274,7 +293,10 @@ def main() -> None:
         
         generate = st.button("Generate Analysis", use_container_width=True)
 
-    if generate:
+    # Auto-generate on page load or when button clicked
+    if generate or 'generated' not in st.session_state:
+        st.session_state.generated = True
+        
         status = st.empty()
         
         try:
@@ -329,48 +351,52 @@ def main() -> None:
             
             status.empty()
             
-            col1, col2 = st.columns([2, 1])
+            # Calculate IV statistics
+            iv_stats = calculate_iv_statistics(valid_options, ivs, spot_price)
+            
+            # Main visualization
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Metrics in clean table format below visualization
+            st.markdown("---")
+            
+            col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.plotly_chart(fig, use_container_width=True)
+                st.metric("Spot Price", f"${spot_price:.2f}")
+                st.metric("ATM IV", f"{iv_stats['atm_iv']:.1f}%")
             
             with col2:
-                st.markdown("### Market Overview")
-                st.metric("Current Price", f"${spot_price:.2f}")
-                st.metric("Valid Options", f"{len(ivs)} of {len(options_df)}")
-                
-                iv_stats = calculate_iv_statistics(valid_options, ivs, spot_price)
-                
-                st.markdown("### Volatility Analytics")
-                st.metric(
-                    "ATM IV",
-                    f"{iv_stats['atm_iv']:.1f}%"
-                )
-                
+                st.metric("Valid Options", f"{len(ivs)}")
                 if iv_stats['iv_skew'] is not None:
-                    st.metric(
-                        "IV Skew",
-                        f"{iv_stats['iv_skew']:.1f}%"
-                    )
+                    st.metric("IV Skew", f"{iv_stats['iv_skew']:.1f}%")
                 else:
                     st.metric("IV Skew", "N/A")
-                
-                st.metric(
-                    "Term Structure",
-                    f"{iv_stats['term_structure']:.1f}%"
-                )
-                
+            
+            with col3:
+                st.metric("Term Structure", f"{iv_stats['term_structure']:.1f}%")
+                st.metric("IV Range", f"{iv_stats['iv_min']:.1f}% - {iv_stats['iv_max']:.1f}%")
+            
+            with col4:
+                st.metric("Avg IV", f"{iv_stats['avg_iv']:.1f}%")
+                st.metric("IV Std Dev", f"{iv_stats['iv_std']:.1f}%")
+            
+            # Export section
+            st.markdown("---")
+            col_export1, col_export2, col_export3 = st.columns([1, 1, 2])
+            
+            with col_export1:
                 if len(valid_options) > 0:
-                    st.markdown("---")
                     df_download = pd.DataFrame({
                         'Strike': [opt['strike'] for opt in valid_options],
                         'Days_to_Expiry': [opt['days_to_expiry'] for opt in valid_options],
                         'IV': [iv * 100 for iv in ivs],
-                        'Option_Type': [opt['type'] for opt in valid_options]
+                        'Option_Type': [opt['type'] for opt in valid_options],
+                        'Moneyness': [opt['strike']/spot_price for opt in valid_options]
                     })
                     
                     st.download_button(
-                        "Export Analysis",
+                        "Export Data (CSV)",
                         data=df_download.to_csv(index=False).encode('utf-8'),
                         file_name=f'{ticker}_iv_analysis_{datetime.now().strftime("%Y%m%d")}.csv',
                         mime='text/csv',
