@@ -116,20 +116,21 @@ class SurfacePlotter:
         
         self.vol_mesh = np.ma.array(self.vol_mesh, mask=np.isnan(self.vol_mesh))
     
-    def create_surface_plot(self, theme: str = 'dark', colormap: str = 'Hot') -> go.Figure:
+    def create_surface_plot(self, theme: str = 'dark', colormap: str = 'Hot', ticker: str = '') -> go.Figure:
         """
         Generate interactive 3D surface plot with theme and colormap support.
         
         Args:
             theme: Theme name ('dark' or 'light')
             colormap: Colormap name from COLORMAP_PRESETS
+            ticker: Stock ticker symbol for title display
             
         Returns:
             Plotly Figure object with configured 3D surface
             
         Example:
             >>> plotter = SurfacePlotter(surface_data)
-            >>> fig = plotter.create_surface_plot(theme='dark', colormap='Viridis')
+            >>> fig = plotter.create_surface_plot(theme='dark', colormap='Viridis', ticker='SPY')
             >>> fig.show()
         """
         is_dark = theme.lower() == 'dark'
@@ -163,8 +164,8 @@ class SurfacePlotter:
                 colorbar=dict(
                     title=dict(
                         text='Implied Volatility (%)',
-                        side='right',
-                        font=dict(color=text_color)
+                        side='top',
+                        font=dict(color=text_color, size=20)
                     ),
                     x=1.02,
                     thickness=20,
@@ -174,8 +175,17 @@ class SurfacePlotter:
             )
         ])
 
+        # Create title with ticker
+        title_text = f"Implied Volatility Surface - {ticker}" if ticker else "Implied Volatility Surface"
+
         # Update layout with theme and config values
         fig.update_layout(
+            title=dict(
+                text=title_text,
+                font=dict(size=20, color=text_color),
+                x=0.5,
+                xanchor='center'
+            ),
             scene=dict(
                 xaxis_title='Time to Expiration (Years)',
                 yaxis_title='Strike Price ($)' if self.data.y_axis_type == 'Strike' else 'Moneyness (Strike/Spot)',
@@ -217,7 +227,7 @@ class SurfacePlotter:
             ),
             width=VisualizationConfig.DEFAULT_PLOT_WIDTH,
             height=VisualizationConfig.DEFAULT_PLOT_HEIGHT,
-            margin=dict(l=0, r=100, t=0, b=0),
+            margin=dict(l=0, r=100, t=50, b=0),  # Increased top margin for title
             paper_bgcolor=bg_color,
             plot_bgcolor=bg_color,
             font=dict(color=text_color)

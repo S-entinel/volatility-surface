@@ -346,7 +346,7 @@ def main() -> None:
                 )
                 
                 plotter = SurfacePlotter(surface_data)
-                fig = plotter.create_surface_plot(theme=theme.lower(), colormap=colormap)
+                fig = plotter.create_surface_plot(theme=theme.lower(), colormap=colormap, ticker=ticker)
                 fig = plotter.add_smile_slices(fig, theme=theme.lower())
             
             status.empty()
