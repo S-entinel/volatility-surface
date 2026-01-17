@@ -163,74 +163,83 @@ class SurfacePlotter:
                 ),
                 colorbar=dict(
                     title=dict(
-                        text='Implied Volatility (%)',
+                        text='IV (%)',
                         side='top',
-                        font=dict(color=text_color, size=20)
+                        font=dict(color=text_color, size=13, family='Arial, sans-serif')
                     ),
-                    x=1.02,
-                    thickness=20,
-                    len=0.85,
-                    tickfont=dict(color=text_color)
+                    x=1.0,  # Moved closer to plot
+                    y=0.5,
+                    thickness=15,
+                    len=0.75,
+                    tickfont=dict(color=text_color, size=11),
+                    tickformat='.1f'
                 )
             )
         ])
 
         # Create title with ticker
-        title_text = f"Implied Volatility Surface - {ticker}" if ticker else "Implied Volatility Surface"
+        title_text = f"{ticker} - Implied Volatility Surface" if ticker else "Implied Volatility Surface"
 
         # Update layout with theme and config values
         fig.update_layout(
             title=dict(
                 text=title_text,
-                font=dict(size=20, color=text_color),
-                x=0.5,
-                xanchor='center'
+                font=dict(size=20, color=text_color, family='Arial, sans-serif', weight='bold'),
+                x=0.5,  # Center align
+                xanchor='center',
+                y=0.98,
+                yanchor='top'
             ),
             scene=dict(
                 xaxis_title='Time to Expiration (Years)',
-                yaxis_title='Strike Price ($)' if self.data.y_axis_type == 'Strike' else 'Moneyness (Strike/Spot)',
-                zaxis_title='Implied Volatility (%)',
+                yaxis_title='Strike ($)' if self.data.y_axis_type == 'Strike' else 'Moneyness',
+                zaxis_title='IV (%)',
                 camera=dict(
                     up=dict(x=0, y=0, z=1),
-                    center=dict(x=0, y=0, z=VisualizationConfig.CAMERA_CENTER_Z),
+                    center=dict(x=0, y=0, z=-0.1),
                     eye=dict(
-                        x=VisualizationConfig.CAMERA_EYE_X, 
-                        y=VisualizationConfig.CAMERA_EYE_Y, 
-                        z=VisualizationConfig.CAMERA_EYE_Z
+                        x=1.8, 
+                        y=-1.8, 
+                        z=1.3
                     )
                 ),
                 xaxis=dict(
                     gridcolor=grid_color,
                     showbackground=True,
                     backgroundcolor=bg_color,
-                    title_font=dict(color=text_color),
-                    tickfont=dict(color=text_color),
-                    zerolinecolor=grid_color
+                    title_font=dict(color=text_color, size=12),
+                    tickfont=dict(color=text_color, size=10),
+                    zerolinecolor=grid_color,
+                    showspikes=False
                 ),
                 yaxis=dict(
                     gridcolor=grid_color,
                     showbackground=True,
                     backgroundcolor=bg_color,
-                    title_font=dict(color=text_color),
-                    tickfont=dict(color=text_color),
-                    zerolinecolor=grid_color
+                    title_font=dict(color=text_color, size=12),
+                    tickfont=dict(color=text_color, size=10),
+                    zerolinecolor=grid_color,
+                    showspikes=False
                 ),
                 zaxis=dict(
                     gridcolor=grid_color,
                     showbackground=True,
                     backgroundcolor=bg_color,
-                    title_font=dict(color=text_color),
-                    tickfont=dict(color=text_color),
-                    zerolinecolor=grid_color
+                    title_font=dict(color=text_color, size=12),
+                    tickfont=dict(color=text_color, size=10),
+                    zerolinecolor=grid_color,
+                    showspikes=False
                 ),
                 bgcolor=bg_color
             ),
             width=VisualizationConfig.DEFAULT_PLOT_WIDTH,
             height=VisualizationConfig.DEFAULT_PLOT_HEIGHT,
-            margin=dict(l=0, r=100, t=50, b=0),  # Increased top margin for title
+            margin=dict(l=0, r=120, t=60, b=0),
             paper_bgcolor=bg_color,
             plot_bgcolor=bg_color,
-            font=dict(color=text_color)
+            font=dict(color=text_color, family='Arial, sans-serif'),
+            showlegend=False,
+            hovermode='closest'
         )
 
         return fig

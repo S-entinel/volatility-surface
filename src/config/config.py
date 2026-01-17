@@ -15,8 +15,8 @@ class MarketDataConfig:
     """Configuration for market data fetching and filtering."""
     
     # Strike price range filters (as percentages of spot)
-    DEFAULT_MIN_STRIKE_PCT: float = 70.0
-    DEFAULT_MAX_STRIKE_PCT: float = 130.0
+    DEFAULT_MIN_STRIKE_PCT: float = 75.0
+    DEFAULT_MAX_STRIKE_PCT: float = 125.0
     
     # Volume filtering
     DEFAULT_MIN_VOLUME: int = 10
@@ -32,8 +32,8 @@ class MarketDataConfig:
 class ModelConfig:
     """Configuration for Black-Scholes model parameters."""
     
-    # Default risk-free rate (as decimal, e.g., 0.045 = 4.5%)
-    DEFAULT_RISK_FREE_RATE: float = 0.045
+    # Default risk-free rate (as decimal, e.g., 0.015 = 1.5%)
+    DEFAULT_RISK_FREE_RATE: float = 0.015
     
     # Default dividend yield (as decimal, e.g., 0.013 = 1.3%)
     DEFAULT_DIVIDEND_YIELD: float = 0.013
@@ -161,7 +161,7 @@ def get_all_configs() -> Dict[str, Type]:
     Example:
         >>> configs = get_all_configs()
         >>> configs['market_data'].DEFAULT_MIN_STRIKE_PCT
-        70.0
+        75.0
     """
     return {
         'market_data': MarketDataConfig,

@@ -293,9 +293,24 @@ def main() -> None:
         
         generate = st.button("Generate Analysis", use_container_width=True)
 
-    # Auto-generate on page load or when button clicked
-    if generate or 'generated' not in st.session_state:
-        st.session_state.generated = True
+    # Only generate when button is explicitly clicked (not on page load)
+    if generate:
+        # Store that we want to generate
+        st.session_state.should_generate = True
+        st.session_state.current_params = {
+            'ticker': ticker,
+            'min_strike_pct': min_strike_pct,
+            'max_strike_pct': max_strike_pct,
+            'min_volume': min_volume,
+            'risk_free_rate': risk_free_rate,
+            'dividend_yield': dividend_yield,
+            'theme': theme,
+            'colormap': colormap,
+            'y_axis_type': y_axis_type
+        }
+    
+    # Check if we should generate (either button clicked or first load)
+    if st.session_state.get('should_generate', False) or 'analysis_results' not in st.session_state:
         
         status = st.empty()
         
@@ -312,7 +327,7 @@ def main() -> None:
                     min_strike_pct=min_strike_pct,
                     max_strike_pct=max_strike_pct,
                     min_volume=min_volume,
-                    risk_free_rate=risk_free_decimal  # Pass the correct rate
+                    risk_free_rate=risk_free_decimal
                 )
                 
                 if options_df.empty:
@@ -346,65 +361,82 @@ def main() -> None:
                 )
                 
                 plotter = SurfacePlotter(surface_data)
+                # Pass ticker to create_surface_plot
                 fig = plotter.create_surface_plot(theme=theme.lower(), colormap=colormap, ticker=ticker)
                 fig = plotter.add_smile_slices(fig, theme=theme.lower())
+                
+                # Calculate IV statistics
+                iv_stats = calculate_iv_statistics(valid_options, ivs, spot_price)
+                
+                # Store results in session state
+                st.session_state.analysis_results = {
+                    'fig': fig,
+                    'spot_price': spot_price,
+                    'ticker': ticker,
+                    'ivs': ivs,
+                    'valid_options': valid_options,
+                    'iv_stats': iv_stats
+                }
+                st.session_state.should_generate = False
             
             status.empty()
             
-            # Calculate IV statistics
-            iv_stats = calculate_iv_statistics(valid_options, ivs, spot_price)
-            
-            # Main visualization
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Metrics in clean table format below visualization
-            st.markdown("---")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Spot Price", f"${spot_price:.2f}")
-                st.metric("ATM IV", f"{iv_stats['atm_iv']:.1f}%")
-            
-            with col2:
-                st.metric("Valid Options", f"{len(ivs)}")
-                if iv_stats['iv_skew'] is not None:
-                    st.metric("IV Skew", f"{iv_stats['iv_skew']:.1f}%")
-                else:
-                    st.metric("IV Skew", "N/A")
-            
-            with col3:
-                st.metric("Term Structure", f"{iv_stats['term_structure']:.1f}%")
-                st.metric("IV Range", f"{iv_stats['iv_min']:.1f}% - {iv_stats['iv_max']:.1f}%")
-            
-            with col4:
-                st.metric("Avg IV", f"{iv_stats['avg_iv']:.1f}%")
-                st.metric("IV Std Dev", f"{iv_stats['iv_std']:.1f}%")
-            
-            # Export section
-            st.markdown("---")
-            col_export1, col_export2, col_export3 = st.columns([1, 1, 2])
-            
-            with col_export1:
-                if len(valid_options) > 0:
-                    df_download = pd.DataFrame({
-                        'Strike': [opt['strike'] for opt in valid_options],
-                        'Days_to_Expiry': [opt['days_to_expiry'] for opt in valid_options],
-                        'IV': [iv * 100 for iv in ivs],
-                        'Option_Type': [opt['type'] for opt in valid_options],
-                        'Moneyness': [opt['strike']/spot_price for opt in valid_options]
-                    })
-                    
-                    st.download_button(
-                        "Export Data (CSV)",
-                        data=df_download.to_csv(index=False).encode('utf-8'),
-                        file_name=f'{ticker}_iv_analysis_{datetime.now().strftime("%Y%m%d")}.csv',
-                        mime='text/csv',
-                        use_container_width=True
-                    )
-            
         except Exception as e:
             st.error(f"Analysis Error: {str(e)}")
+            return
+    
+    # Display results if available (either just generated or from previous generation)
+    if 'analysis_results' in st.session_state:
+        results = st.session_state.analysis_results
+        
+        # Main visualization
+        st.plotly_chart(results['fig'], use_container_width=True)
+        
+        # Metrics in clean table format below visualization
+        st.markdown("---")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Spot Price", f"${results['spot_price']:.2f}")
+            st.metric("ATM IV", f"{results['iv_stats']['atm_iv']:.1f}%")
+        
+        with col2:
+            st.metric("Valid Options", f"{len(results['ivs'])}")
+            if results['iv_stats']['iv_skew'] is not None:
+                st.metric("IV Skew", f"{results['iv_stats']['iv_skew']:.1f}%")
+            else:
+                st.metric("IV Skew", "N/A")
+        
+        with col3:
+            st.metric("Term Structure", f"{results['iv_stats']['term_structure']:.1f}%")
+            st.metric("IV Range", f"{results['iv_stats']['iv_min']:.1f}% - {results['iv_stats']['iv_max']:.1f}%")
+        
+        with col4:
+            st.metric("Avg IV", f"{results['iv_stats']['avg_iv']:.1f}%")
+            st.metric("IV Std Dev", f"{results['iv_stats']['iv_std']:.1f}%")
+        
+        # Export section
+        st.markdown("---")
+        col_export1, col_export2, col_export3 = st.columns([1, 1, 2])
+        
+        with col_export1:
+            if len(results['valid_options']) > 0:
+                df_download = pd.DataFrame({
+                    'Strike': [opt['strike'] for opt in results['valid_options']],
+                    'Days_to_Expiry': [opt['days_to_expiry'] for opt in results['valid_options']],
+                    'IV': [iv * 100 for iv in results['ivs']],
+                    'Option_Type': [opt['type'] for opt in results['valid_options']],
+                    'Moneyness': [opt['strike']/results['spot_price'] for opt in results['valid_options']]
+                })
+                
+                st.download_button(
+                    "Export Data (CSV)",
+                    data=df_download.to_csv(index=False).encode('utf-8'),
+                    file_name=f"{results['ticker']}_iv_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime='text/csv',
+                    use_container_width=True
+                )
             
 
 if __name__ == "__main__":
