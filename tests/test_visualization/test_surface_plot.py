@@ -327,12 +327,14 @@ class TestSurfacePlotterIntegration:
         # Create surface
         fig = plotter.create_surface_plot(theme='dark', colormap='Viridis')
         
-        # Add smile slices
-        fig = plotter.add_smile_slices(fig, theme='dark', expiry_days=[30, 60, 90])
+        # Add smile slices (all inside the data's range of roughly 37 to 383 days)
+        fig = plotter.add_smile_slices(fig, theme='dark', expiry_days=[60, 120, 180])
         
         # Verify final figure
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) >= 4  # Surface + 3 smile slices
+        assert len(fig.data) == 4  # Surface + 3 smile slices
+        assert plotter.drawn_slice_days == [60, 120, 180]
+        assert plotter.skipped_slice_days == []
     
     @pytest.mark.integration
     def test_strike_vs_moneyness_plotting(self, sample_surface_data):
@@ -450,3 +452,99 @@ class TestEdgeCases:
         fig = plotter.create_surface_plot()
         
         assert isinstance(fig, go.Figure)
+
+
+def _linear_surface_plotter() -> SurfacePlotter:
+    """
+    Surface where IV = 0.20 + 0.10 * T on a full grid, covering 20 to 365 days.
+
+    Linear interpolation reproduces a linear function exactly, so the expected IV at
+    any maturity inside the range is known analytically.
+    """
+    days = np.array([20, 60, 120, 240, 365])
+    strikes = np.arange(80.0, 125.0, 5.0)
+    maturity_grid, strike_grid = np.meshgrid(days / 365, strikes, indexing='ij')
+    ivs = 0.20 + 0.10 * maturity_grid
+    data = SurfaceData(
+        strikes=strike_grid.flatten(),
+        expiries=maturity_grid.flatten(),
+        ivs=ivs.flatten(),
+        spot_price=100.0
+    )
+    return SurfacePlotter(data)
+
+
+class TestSmileSliceLabelling:
+    """Smile slices must be drawn at the requested maturity and labelled truthfully."""
+
+    @pytest.mark.unit
+    def test_slice_is_at_exact_requested_maturity(self):
+        plotter = _linear_surface_plotter()
+        fig = plotter.add_smile_slices(plotter.create_surface_plot(), expiry_days=[45])
+
+        slice_trace = fig.data[-1]
+        assert np.allclose(slice_trace.x, 45 / 365), "Slice must not snap to a nearby mesh row"
+
+    @pytest.mark.unit
+    def test_slice_lies_on_the_surface(self):
+        """Interpolated IV at 45, 100 and 300 days must match the analytic surface."""
+        plotter = _linear_surface_plotter()
+        fig = plotter.add_smile_slices(plotter.create_surface_plot(), expiry_days=[45, 100, 300])
+
+        for trace, days in zip(fig.data[1:], [45, 100, 300]):
+            expected = 100 * (0.20 + 0.10 * days / 365)
+            assert np.allclose(trace.z, expected, atol=1e-6), f"{days}d slice is off the surface"
+
+    @pytest.mark.unit
+    def test_slices_are_labelled_with_requested_days(self):
+        plotter = _linear_surface_plotter()
+        fig = plotter.add_smile_slices(plotter.create_surface_plot(), expiry_days=[45, 100])
+
+        assert [trace.name for trace in fig.data[1:]] == ['45d', '100d']
+        for trace, label in zip(fig.data[1:], ['45d', '100d']):
+            assert [t for t in trace.text if t] == [label], "Exactly one text label per slice"
+
+    @pytest.mark.unit
+    def test_out_of_range_requests_are_skipped_not_mislabelled(self):
+        plotter = _linear_surface_plotter()
+        base = plotter.create_surface_plot()
+        fig = plotter.add_smile_slices(base, expiry_days=[10, 60, 400])
+
+        assert len(fig.data) == 2, "Only the 60d slice should be drawn (surface + 1)"
+        assert plotter.drawn_slice_days == [60]
+        assert plotter.skipped_slice_days == [10, 400]
+
+    @pytest.mark.unit
+    @pytest.mark.edge_case
+    def test_first_and_last_expiry_days_are_accepted(self):
+        plotter = _linear_surface_plotter()
+        fig = plotter.add_smile_slices(plotter.create_surface_plot(), expiry_days=[20, 365])
+
+        assert plotter.drawn_slice_days == [20, 365]
+        assert plotter.skipped_slice_days == []
+        assert len(fig.data) == 3
+
+    @pytest.mark.unit
+    def test_state_resets_on_each_call(self):
+        plotter = _linear_surface_plotter()
+        plotter.add_smile_slices(plotter.create_surface_plot(), expiry_days=[10])
+        assert plotter.skipped_slice_days == [10]
+
+        plotter.add_smile_slices(plotter.create_surface_plot(), expiry_days=[60])
+        assert plotter.skipped_slice_days == []
+        assert plotter.drawn_slice_days == [60]
+
+    @pytest.mark.unit
+    def test_theme_controls_line_colour(self):
+        plotter = _linear_surface_plotter()
+        dark = plotter.add_smile_slices(plotter.create_surface_plot(theme='dark'), theme='dark', expiry_days=[60])
+        light = plotter.add_smile_slices(plotter.create_surface_plot(theme='light'), theme='light', expiry_days=[60])
+
+        assert dark.data[-1].line.color == 'rgba(255,255,255,0.8)'
+        assert light.data[-1].line.color == 'rgba(0,0,0,0.8)'
+
+    @pytest.mark.unit
+    def test_no_slices_before_any_call(self):
+        plotter = _linear_surface_plotter()
+        assert plotter.drawn_slice_days == []
+        assert plotter.skipped_slice_days == []

@@ -394,7 +394,8 @@ def main() -> None:
                     'valid_options': valid_options,
                     'iv_stats': iv_stats,
                     'dividend_yield_used': used_dividend,
-                    'dividend_source': dividend_source
+                    'dividend_source': dividend_source,
+                    'skipped_slice_days': list(plotter.skipped_slice_days)
                 }
                 st.session_state.should_generate = False
             
@@ -410,6 +411,12 @@ def main() -> None:
         
         # Main visualisation
         st.plotly_chart(results['fig'], use_container_width=True)
+
+        if results.get('skipped_slice_days'):
+            skipped_text = ", ".join(f"{days}d" for days in results['skipped_slice_days'])
+            st.caption(
+                f"Smile slice(s) not drawn because they fall outside the available expiries: {skipped_text}."
+            )
         
         # Metrics in clean table format below visualization
         st.markdown("---")
