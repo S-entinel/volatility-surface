@@ -51,7 +51,7 @@ class IVCalculationConfig:
     # Convergence parameters
     IV_MIN_BOUND: float = 1e-6  # Minimum volatility (near zero)
     IV_MAX_BOUND: float = 5.0   # Maximum volatility (500%)
-    IV_CONVERGENCE_TOLERANCE: float = 1e-4
+    IV_CONVERGENCE_TOLERANCE: float = 1e-8  # Absolute tolerance on sigma passed to brentq (xtol)
     
     # Intrinsic value tolerance (for arbitrage detection)
     INTRINSIC_VALUE_TOLERANCE: float = 0.99
