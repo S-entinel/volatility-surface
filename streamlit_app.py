@@ -251,10 +251,12 @@ def main() -> None:
                     format="%.1f"
                 )
                 
-            min_volume = st.number_input(
-                "Min Option Volume",
-                min_value=MarketDataConfig.MIN_VOLUME_THRESHOLD,
-                value=MarketDataConfig.DEFAULT_MIN_VOLUME
+            min_open_interest = st.number_input(
+                "Min Open Interest",
+                min_value=MarketDataConfig.MIN_OPEN_INTEREST_THRESHOLD,
+                value=MarketDataConfig.DEFAULT_MIN_OPEN_INTEREST,
+                help="Contracts with fewer open positions than this are ignored. "
+                     "Unlike daily volume, open interest does not reset overnight."
             )
         
         with st.expander("Model Parameters", expanded=True):
@@ -312,7 +314,7 @@ def main() -> None:
             'ticker': ticker,
             'min_strike_pct': min_strike_pct,
             'max_strike_pct': max_strike_pct,
-            'min_volume': min_volume,
+            'min_open_interest': min_open_interest,
             'risk_free_rate': risk_free_rate,
             'dividend_override_pct': dividend_yield if override_dividend else None,
             'theme': theme,
@@ -337,7 +339,7 @@ def main() -> None:
                 options_df = fetcher.prepare_for_iv(
                     min_strike_pct=min_strike_pct,
                     max_strike_pct=max_strike_pct,
-                    min_volume=min_volume,
+                    min_open_interest=int(min_open_interest),
                     risk_free_rate=risk_free_decimal
                 )
                 

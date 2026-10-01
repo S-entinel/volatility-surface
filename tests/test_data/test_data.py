@@ -8,7 +8,9 @@ import pytest
 import pandas as pd
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
-from src.data.market_data import OptionDataFetcher, resolve_dividend_yield, MAX_PLAUSIBLE_DIVIDEND_YIELD
+from src.data.market_data import (
+    OptionDataFetcher, resolve_dividend_yield, filter_quotes, MAX_PLAUSIBLE_DIVIDEND_YIELD
+)
 
 
 class TestOptionDataFetcherInit:
@@ -290,7 +292,8 @@ class TestPrepareForIVIntegration:
                 'strike': [95.0, 100.0, 105.0],
                 'bid': [7.0, 5.0, 3.0],
                 'ask': [7.5, 5.5, 3.5],
-                'volume': [100, 200, 150]
+                'volume': [100, 200, 150],
+                'openInterest': [500, 800, 600]
             })
             mock_ticker.return_value.option_chain.return_value = mock_chain
             
@@ -321,7 +324,8 @@ class TestPrepareForIVIntegration:
                 'strike': [80.0, 90.0, 100.0, 110.0, 120.0],  # Wide range
                 'bid': [20.0, 10.0, 5.0, 2.0, 0.5],
                 'ask': [20.5, 10.5, 5.5, 2.5, 1.0],
-                'volume': [50, 100, 200, 100, 50]
+                'volume': [5, 5, 5, 5, 5],
+                'openInterest': [50, 100, 200, 100, 50]
             })
             mock_ticker.return_value.option_chain.return_value = mock_chain
             mock_ticker.return_value.info = {}
@@ -330,10 +334,10 @@ class TestPrepareForIVIntegration:
             result = fetcher.prepare_for_iv(
                 min_strike_pct=90.0,  # Filter out 80
                 max_strike_pct=110.0,  # Filter out 120
-                min_volume=75  # Filter out 50s
+                min_open_interest=75  # Filter out the 50s
             )
             
-            # Should only have 90, 100, 110 strikes with volume >= 75
+            # Only 90, 100, 110 strikes with open interest >= 75; daily volume is irrelevant
             assert len(result) == 3
             assert result['strike'].min() >= 90.0
             assert result['strike'].max() <= 110.0
@@ -463,3 +467,64 @@ class TestResolveDividendYieldRealYahooData:
     def test_tsla_real_values_non_payer(self):
         info = {'dividendYield': None, 'dividendRate': None, 'trailingAnnualDividendYield': 0.0}
         assert resolve_dividend_yield(info, spot_price=354.81) == 0.0
+
+
+class TestFilterQuotes:
+    """Quote and liquidity filters that replace the old daily-volume filter."""
+
+    GOOD = dict(strike=[100.0], bid=[5.0], ask=[5.2], openInterest=[100])
+
+    @staticmethod
+    def chain(**columns) -> pd.DataFrame:
+        return pd.DataFrame(columns)
+
+    @pytest.mark.unit
+    def test_good_quote_kept(self):
+        assert len(filter_quotes(self.chain(**self.GOOD), min_open_interest=10)) == 1
+
+    @pytest.mark.unit
+    def test_zero_bid_dropped(self):
+        assert filter_quotes(self.chain(**{**self.GOOD, 'bid': [0.0]}), 10).empty
+
+    @pytest.mark.unit
+    def test_crossed_quote_dropped(self):
+        assert filter_quotes(self.chain(**{**self.GOOD, 'bid': [5.5], 'ask': [5.0]}), 10).empty
+
+    @pytest.mark.unit
+    def test_wide_relative_spread_dropped(self):
+        """Spread of 2.0 on a mid of 2.0 is 100% wide; the limit is 50%."""
+        assert filter_quotes(self.chain(**{**self.GOOD, 'bid': [1.0], 'ask': [3.0]}), 10).empty
+
+    @pytest.mark.unit
+    def test_spread_just_inside_limit_kept(self):
+        """Spread 1.0 on mid 4.0 is 25%."""
+        assert len(filter_quotes(self.chain(**{**self.GOOD, 'bid': [3.5], 'ask': [4.5]}), 10)) == 1
+
+    @pytest.mark.unit
+    def test_tiny_mid_price_dropped(self):
+        assert filter_quotes(self.chain(**{**self.GOOD, 'bid': [0.01], 'ask': [0.02]}), 10).empty
+
+    @pytest.mark.unit
+    def test_low_open_interest_dropped(self):
+        chain = self.chain(**{**self.GOOD, 'openInterest': [9]})
+        assert filter_quotes(chain, 10).empty
+        assert len(filter_quotes(chain, 5)) == 1
+
+    @pytest.mark.unit
+    @pytest.mark.edge_case
+    def test_missing_open_interest_counts_as_zero(self):
+        chain = self.chain(**{**self.GOOD, 'openInterest': [float('nan')]})
+        assert filter_quotes(chain, 10).empty
+        assert len(filter_quotes(chain, 0)) == 1
+
+    @pytest.mark.unit
+    @pytest.mark.edge_case
+    def test_chain_without_open_interest_column(self):
+        chain = self.chain(strike=[100.0], bid=[5.0], ask=[5.2])
+        assert filter_quotes(chain, 10).empty
+        assert len(filter_quotes(chain, 0)) == 1
+
+    @pytest.mark.unit
+    def test_daily_volume_is_ignored(self):
+        """A contract with zero volume today but real open interest must survive."""
+        assert len(filter_quotes(self.chain(**{**self.GOOD, 'volume': [0]}), 10)) == 1

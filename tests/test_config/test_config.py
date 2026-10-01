@@ -31,9 +31,11 @@ class TestMarketDataConfig:
     @pytest.mark.unit
     def test_volume_defaults(self):
         """Test volume filter defaults."""
-        assert MarketDataConfig.DEFAULT_MIN_VOLUME == 10
-        assert MarketDataConfig.MIN_VOLUME_THRESHOLD == 0
-        assert isinstance(MarketDataConfig.DEFAULT_MIN_VOLUME, int)
+        assert MarketDataConfig.DEFAULT_MIN_OPEN_INTEREST == 10
+        assert MarketDataConfig.MIN_OPEN_INTEREST_THRESHOLD == 0
+        assert isinstance(MarketDataConfig.DEFAULT_MIN_OPEN_INTEREST, int)
+        assert MarketDataConfig.MAX_RELATIVE_SPREAD == 0.5
+        assert MarketDataConfig.MIN_QUOTE_MID_PRICE == 0.05
     
     @pytest.mark.unit
     def test_expiry_defaults(self):

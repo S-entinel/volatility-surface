@@ -18,9 +18,13 @@ class MarketDataConfig:
     DEFAULT_MIN_STRIKE_PCT: float = 75.0
     DEFAULT_MAX_STRIKE_PCT: float = 125.0
     
-    # Volume filtering
-    DEFAULT_MIN_VOLUME: int = 10
-    MIN_VOLUME_THRESHOLD: int = 0  # Absolute minimum
+    # Liquidity filtering (open interest persists overnight; daily volume does not)
+    DEFAULT_MIN_OPEN_INTEREST: int = 10
+    MIN_OPEN_INTEREST_THRESHOLD: int = 0  # Absolute minimum
+
+    # Quote quality filtering
+    MAX_RELATIVE_SPREAD: float = 0.5   # (ask - bid) / mid must not exceed 50%
+    MIN_QUOTE_MID_PRICE: float = 0.05  # Below this, tick size dominates the implied volatility
     
     # Time to expiration filters
     MIN_DAYS_TO_EXPIRY: int = 7  # Exclude options expiring within a week

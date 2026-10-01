@@ -69,6 +69,45 @@ def resolve_dividend_yield(info: Mapping[str, Any], spot_price: Optional[float] 
     return float(result)
 
 
+def filter_quotes(chain: pd.DataFrame, min_open_interest: int) -> pd.DataFrame:
+    """
+    Keep only contracts with a usable two-sided quote and enough open interest.
+
+    A contract is kept when all of these hold:
+
+    - bid > 0 and ask >= bid (a live, uncrossed quote)
+    - mid price >= ``MarketDataConfig.MIN_QUOTE_MID_PRICE``
+    - (ask - bid) / mid <= ``MarketDataConfig.MAX_RELATIVE_SPREAD``
+    - open interest >= ``min_open_interest`` (missing open interest counts as 0)
+
+    Open interest is used instead of daily volume because volume resets every session,
+    which would empty the chain before the market opens.
+
+    Args:
+        chain: One side (calls or puts) of a Yahoo option chain
+        min_open_interest: Minimum open interest
+
+    Returns:
+        The rows that pass every filter
+    """
+    bid = chain['bid']
+    ask = chain['ask']
+    mid = (bid + ask) / 2
+    if 'openInterest' in chain:
+        open_interest = chain['openInterest'].fillna(0)
+    else:
+        open_interest = pd.Series(0, index=chain.index)
+
+    keep = (
+        (bid > 0)
+        & (ask >= bid)
+        & (mid >= MarketDataConfig.MIN_QUOTE_MID_PRICE)
+        & ((ask - bid) / mid <= MarketDataConfig.MAX_RELATIVE_SPREAD)
+        & (open_interest >= min_open_interest)
+    )
+    return chain[keep]
+
+
 class OptionDataFetcher:
     """
     Fetches and prepares option market data for implied volatility calculations.
@@ -94,7 +133,7 @@ class OptionDataFetcher:
     def prepare_for_iv(self, 
                       min_strike_pct: float = MarketDataConfig.DEFAULT_MIN_STRIKE_PCT,
                       max_strike_pct: float = MarketDataConfig.DEFAULT_MAX_STRIKE_PCT,
-                      min_volume: int = MarketDataConfig.DEFAULT_MIN_VOLUME,
+                      min_open_interest: int = MarketDataConfig.DEFAULT_MIN_OPEN_INTEREST,
                       risk_free_rate: float = ModelConfig.DEFAULT_RISK_FREE_RATE) -> pd.DataFrame:
         """
         Fetch and prepare option data for IV calculation.
@@ -102,7 +141,7 @@ class OptionDataFetcher:
         Args:
             min_strike_pct: Minimum strike as % of spot (default from config)
             max_strike_pct: Maximum strike as % of spot (default from config)
-            min_volume: Minimum option volume filter (default from config)
+            min_open_interest: Minimum open interest filter (default from config)
             risk_free_rate: Risk-free rate in decimal form (default from config)
         
         Returns:
@@ -114,7 +153,7 @@ class OptionDataFetcher:
         """
         logger.info(f"Fetching option data for {self.symbol}")
         logger.info(f"Parameters - Strike range: {min_strike_pct}%-{max_strike_pct}%, "
-                   f"Min volume: {min_volume}, Risk-free rate: {risk_free_rate:.4f}")
+                   f"Min open interest: {min_open_interest}, Risk-free rate: {risk_free_rate:.4f}")
         
         try:
             # Step 1: Fetch spot price
@@ -131,7 +170,7 @@ class OptionDataFetcher:
                 spot_price=spot_price,
                 min_strike_pct=min_strike_pct,
                 max_strike_pct=max_strike_pct,
-                min_volume=min_volume
+                min_open_interest=min_open_interest
             )
             
             if not option_data:
@@ -224,7 +263,7 @@ class OptionDataFetcher:
                             spot_price: float,
                             min_strike_pct: float,
                             max_strike_pct: float,
-                            min_volume: int) -> List[Dict]:
+                            min_open_interest: int) -> List[Dict]:
         """
         Fetch option chains for all expiration dates.
         
@@ -233,7 +272,7 @@ class OptionDataFetcher:
             spot_price: Current spot price for filtering
             min_strike_pct: Minimum strike percentage
             max_strike_pct: Maximum strike percentage
-            min_volume: Minimum volume threshold
+            min_open_interest: Minimum open interest threshold
             
         Returns:
             List of option data dictionaries
@@ -246,12 +285,8 @@ class OptionDataFetcher:
                 opt_chain = self.ticker.option_chain(exp_date.strftime('%Y-%m-%d'))
                 calls = opt_chain.calls
                 
-                # Filter for valid prices and volume
-                calls = calls[
-                    (calls['bid'] > 0) & 
-                    (calls['ask'] > 0) & 
-                    (calls['volume'].fillna(0) >= min_volume)
-                ]
+                # Keep only usable quotes with enough open interest
+                calls = filter_quotes(calls, min_open_interest)
                 
                 # Process each option
                 for _, row in calls.iterrows():
@@ -267,6 +302,7 @@ class OptionDataFetcher:
                             'price': (row['bid'] + row['ask']) / 2,  # midpoint
                             'type': 'call',
                             'volume': row['volume'] if 'volume' in row else 0,
+                            'open_interest': row['openInterest'] if 'openInterest' in row else 0,
                             'days_to_expiry': (exp_date - pd.Timestamp.now().normalize()).days
                         })
                         
