@@ -64,6 +64,15 @@ class BlackScholes:
             >>> price = BlackScholes.price(data)
             >>> print(f"Option price: ${price:.2f}")
         """
+        if option_data.option_type not in ('call', 'put'):
+            raise ValueError(f"Invalid option_type: {option_data.option_type}. Must be 'call' or 'put'")
+
+        # At (or past) expiry the option is worth its intrinsic value
+        if option_data.T <= 0:
+            if option_data.option_type == 'call':
+                return float(max(option_data.S - option_data.K, 0.0))
+            return float(max(option_data.K - option_data.S, 0.0))
+
         # Calculate d1 and d2
         d1: float = (
             np.log(option_data.S / option_data.K) + 

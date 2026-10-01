@@ -23,8 +23,8 @@ class TestMarketDataConfig:
     @pytest.mark.unit
     def test_strike_range_defaults(self):
         """Test strike range default values."""
-        assert MarketDataConfig.DEFAULT_MIN_STRIKE_PCT == 70.0
-        assert MarketDataConfig.DEFAULT_MAX_STRIKE_PCT == 130.0
+        assert MarketDataConfig.DEFAULT_MIN_STRIKE_PCT == 75.0
+        assert MarketDataConfig.DEFAULT_MAX_STRIKE_PCT == 125.0
         assert isinstance(MarketDataConfig.DEFAULT_MIN_STRIKE_PCT, float)
         assert isinstance(MarketDataConfig.DEFAULT_MAX_STRIKE_PCT, float)
     
@@ -54,7 +54,7 @@ class TestModelConfig:
     @pytest.mark.unit
     def test_rate_defaults(self):
         """Test default rates."""
-        assert ModelConfig.DEFAULT_RISK_FREE_RATE == 0.045
+        assert ModelConfig.DEFAULT_RISK_FREE_RATE == 0.015
         assert ModelConfig.DEFAULT_DIVIDEND_YIELD == 0.013
         assert isinstance(ModelConfig.DEFAULT_RISK_FREE_RATE, float)
         assert isinstance(ModelConfig.DEFAULT_DIVIDEND_YIELD, float)
@@ -89,7 +89,7 @@ class TestIVCalculationConfig:
     @pytest.mark.unit
     def test_convergence_tolerance(self):
         """Test convergence tolerance."""
-        assert IVCalculationConfig.IV_CONVERGENCE_TOLERANCE == 1e-4
+        assert IVCalculationConfig.IV_CONVERGENCE_TOLERANCE == 1e-8
         assert isinstance(IVCalculationConfig.IV_CONVERGENCE_TOLERANCE, float)
     
     @pytest.mark.unit

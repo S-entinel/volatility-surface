@@ -9,6 +9,25 @@ import numpy as np
 from src.calculators.black_scholes import BlackScholes, OptionData
 
 
+
+def _reference_bs_price(option: OptionData, is_call: bool) -> float:
+    """Independent Black-Scholes implementation using math.erf (no scipy, no src code)."""
+    import math
+
+    def cdf(x: float) -> float:
+        return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+    sqrt_t = math.sqrt(option.T)
+    d1 = (math.log(option.S / option.K) + (option.r - option.q + 0.5 * option.sigma ** 2) * option.T) \
+        / (option.sigma * sqrt_t)
+    d2 = d1 - option.sigma * sqrt_t
+    spot = option.S * math.exp(-option.q * option.T)
+    strike = option.K * math.exp(-option.r * option.T)
+    if is_call:
+        return spot * cdf(d1) - strike * cdf(d2)
+    return strike * cdf(-d2) - spot * cdf(-d1)
+
+
 class TestBlackScholesPrice:
     """Test suite for Black-Scholes pricing."""
     
@@ -18,8 +37,9 @@ class TestBlackScholesPrice:
         """Test ATM call option pricing."""
         price = BlackScholes.price(atm_call_option)
         
-        # ATM call with 20% vol, 1 year should be around $10.45
-        assert 10.0 < price < 11.0, f"ATM call price {price} outside expected range"
+        # Compare with an independent closed-form calculation (not the code under test)
+        expected = _reference_bs_price(atm_call_option, is_call=True)
+        assert abs(price - expected) < 1e-9, f"ATM call price {price} differs from reference {expected}"
         assert price > 0, "Price must be positive"
     
     @pytest.mark.unit
@@ -28,8 +48,9 @@ class TestBlackScholesPrice:
         """Test ATM put option pricing."""
         price = BlackScholes.price(atm_put_option)
         
-        # ATM put with 20% vol, 1 year (price differs from call due to dividends)
-        assert 5.0 < price < 7.0, f"ATM put price {price} outside expected range"
+        # Compare with an independent closed-form calculation (not the code under test)
+        expected = _reference_bs_price(atm_put_option, is_call=False)
+        assert abs(price - expected) < 1e-9, f"ATM put price {price} differs from reference {expected}"
         assert price > 0, "Price must be positive"
     
     @pytest.mark.unit
