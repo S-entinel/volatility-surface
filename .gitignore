@@ -21,6 +21,14 @@ wheels/
 .installed.cfg
 *.egg
 venv/
+.venv/
+
+# Testing and coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+coverage.xml
 
 # IDE
 .idea/
@@ -28,8 +36,17 @@ venv/
 *.swp
 *.swo
 
-# Streamlit
+# OS
+.DS_Store
+Thumbs.db
+
+.env
+.env.*
 .streamlit/secrets.toml
+
+data/
+*.duckdb
+*.duckdb.wal
 
 # Project specific
 volatility_surface.html
