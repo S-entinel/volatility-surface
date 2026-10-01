@@ -6,19 +6,22 @@ with comprehensive input validation and error handling.
 """
 
 import numpy as np
-from scipy.stats import norm
 from scipy.optimize import brentq
-from typing import Optional
+from typing import Optional, Tuple
+from src.calculators.black_scholes import BlackScholes, OptionData
 from src.utils.logger import setup_logger
 from src.config.config import IVCalculationConfig, ModelConfig
 
 logger = setup_logger(__name__)
 
 
-def bs_call_price(S: float, K: float, T: float, r: float, sigma: float, q: float = 0) -> float:
+def bs_call_price(S: float, K: float, T: float, r: float, sigma: float, q: float = 0.0) -> float:
     """
-    Calculate Black-Scholes call option price.
-    
+    Black-Scholes call price (thin wrapper around ``BlackScholes.price``).
+
+    Kept as a standalone function for convenience and backwards compatibility.
+    At expiry (T <= 0) the intrinsic value is returned.
+
     Args:
         S: Spot price
         K: Strike price
@@ -26,23 +29,17 @@ def bs_call_price(S: float, K: float, T: float, r: float, sigma: float, q: float
         r: Risk-free rate
         sigma: Volatility
         q: Dividend yield (default: 0)
-        
+
     Returns:
         Call option price
     """
-    if T <= 0:
-        return max(S - K, 0)  # Intrinsic value at expiration
-    
-    d1 = (np.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    d2 = d1 - sigma * np.sqrt(T)
-    call_price = S * np.exp(-q * T) * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
-    return call_price
+    return BlackScholes.price(OptionData(S=S, K=K, T=T, r=r, sigma=sigma, q=q, option_type='call'))
 
 
-def bs_put_price(S: float, K: float, T: float, r: float, sigma: float, q: float = 0) -> float:
+def bs_put_price(S: float, K: float, T: float, r: float, sigma: float, q: float = 0.0) -> float:
     """
-    Calculate Black-Scholes put option price.
-    
+    Black-Scholes put price (thin wrapper around ``BlackScholes.price``).
+
     Args:
         S: Spot price
         K: Strike price
@@ -50,17 +47,40 @@ def bs_put_price(S: float, K: float, T: float, r: float, sigma: float, q: float 
         r: Risk-free rate
         sigma: Volatility
         q: Dividend yield (default: 0)
-        
+
     Returns:
         Put option price
     """
-    if T <= 0:
-        return max(K - S, 0)  # Intrinsic value at expiration
-    
-    d1 = (np.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    d2 = d1 - sigma * np.sqrt(T)
-    put_price = K * np.exp(-r * T) * norm.cdf(-d2) - S * np.exp(-q * T) * norm.cdf(-d1)
-    return put_price
+    return BlackScholes.price(OptionData(S=S, K=K, T=T, r=r, sigma=sigma, q=q, option_type='put'))
+
+
+def no_arbitrage_bounds(S: float, K: float, T: float, r: float, q: float,
+                        option_type: str) -> Tuple[float, float]:
+    """
+    Model-free bounds that a European option price must respect.
+
+    Uses *discounted* values (the correct bounds), not raw intrinsic value:
+
+    - Call: max(S*e^(-qT) - K*e^(-rT), 0) <= C <= S*e^(-qT)
+    - Put:  max(K*e^(-rT) - S*e^(-qT), 0) <= P <= K*e^(-rT)
+
+    Args:
+        S: Spot price
+        K: Strike price
+        T: Time to expiration in years
+        r: Risk-free rate
+        q: Dividend yield
+        option_type: 'call' or 'put'
+
+    Returns:
+        Tuple of (lower_bound, upper_bound)
+    """
+    discounted_spot = S * np.exp(-q * T)
+    discounted_strike = K * np.exp(-r * T)
+
+    if option_type == 'call':
+        return max(discounted_spot - discounted_strike, 0.0), discounted_spot
+    return max(discounted_strike - discounted_spot, 0.0), discounted_strike
 
 
 class IVCalculator:
@@ -69,7 +89,7 @@ class IVCalculator:
     
     Features:
     - Input validation for all parameters
-    - Intrinsic value checking to detect arbitrage violations
+    - No-arbitrage bound checking (discounted lower and upper bounds)
     - Statistics tracking for monitoring calculation success rates
     - Detailed error logging for debugging
     """
@@ -119,12 +139,17 @@ class IVCalculator:
         # Normalize option type
         option_type = option_type.lower()
         
-        # Check intrinsic value to catch arbitrage violations
-        intrinsic_value = max(S - K, 0) if option_type == 'call' else max(K - S, 0)
+        # Reject prices outside the no-arbitrage bounds (no implied vol can exist)
+        lower_bound, upper_bound = no_arbitrage_bounds(S, K, T, r, q, option_type)
         tolerance = IVCalculationConfig.INTRINSIC_VALUE_TOLERANCE
-        
-        if market_price < intrinsic_value * tolerance:
-            logger.debug(f"Market price ({market_price:.4f}) below intrinsic value ({intrinsic_value:.4f})")
+
+        if market_price < lower_bound * tolerance:
+            logger.debug(f"Market price ({market_price:.4f}) below no-arbitrage lower bound ({lower_bound:.4f})")
+            self.failed_count += 1
+            return None
+
+        if market_price >= upper_bound:
+            logger.debug(f"Market price ({market_price:.4f}) at or above no-arbitrage upper bound ({upper_bound:.4f})")
             self.failed_count += 1
             return None
 
@@ -132,15 +157,15 @@ class IVCalculator:
             """Objective function: model_price - market_price = 0"""
             if option_type == 'call':
                 return bs_call_price(S, K, T, r, sigma, q) - market_price
-            else:
-                return bs_put_price(S, K, T, r, sigma, q) - market_price
+            return bs_put_price(S, K, T, r, sigma, q) - market_price
 
         try:
             # Use Brent's method to find the root with config bounds
             implied_vol = brentq(
                 objective_function, 
-                IVCalculationConfig.IV_MIN_BOUND, 
-                IVCalculationConfig.IV_MAX_BOUND
+                IVCalculationConfig.IV_MIN_BOUND,
+                IVCalculationConfig.IV_MAX_BOUND,
+                xtol=IVCalculationConfig.IV_CONVERGENCE_TOLERANCE
             )
             return implied_vol
             

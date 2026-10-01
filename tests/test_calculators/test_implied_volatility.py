@@ -6,7 +6,9 @@ Tests IV solver convergence, edge cases, and validation.
 
 import pytest
 import numpy as np
-from src.calculators.implied_volatility import IVCalculator, bs_call_price, bs_put_price
+from src.calculators.implied_volatility import (
+    IVCalculator, bs_call_price, bs_put_price, no_arbitrage_bounds
+)
 from src.calculators.black_scholes import BlackScholes, OptionData
 
 
@@ -419,3 +421,121 @@ class TestIVCalculatorIntegration:
             assert calculated_sigma is not None, f"IV calculation failed for maturity {T}"
             assert abs(calculated_sigma - known_sigma) < 0.001, \
                 f"IV mismatch at maturity {T}: {calculated_sigma} vs {known_sigma}"
+
+
+@pytest.fixture
+def forbid_solver(monkeypatch):
+    """Fail the test if the root-finder is called (the bounds check should reject first)."""
+    from src.calculators import implied_volatility as module
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("brentq was called; the no-arbitrage bounds check should have rejected the price")
+
+    monkeypatch.setattr(module, 'brentq', _boom)
+
+
+class TestNoArbitrageBounds:
+    """Tests for discounted no-arbitrage bounds."""
+
+    @pytest.mark.unit
+    def test_call_bounds_are_discounted(self):
+        """Lower bound uses discounted strike, not raw intrinsic value."""
+        lower, upper = no_arbitrage_bounds(S=100.0, K=90.0, T=1.0, r=0.05, q=0.0, option_type='call')
+        assert lower == pytest.approx(100.0 - 90.0 * np.exp(-0.05))
+        assert lower > 10.0, "Discounted bound must exceed raw intrinsic (10) when r > 0"
+        assert upper == pytest.approx(100.0)
+
+    @pytest.mark.unit
+    def test_put_bounds(self):
+        lower, upper = no_arbitrage_bounds(S=100.0, K=110.0, T=1.0, r=0.05, q=0.02, option_type='put')
+        assert lower == pytest.approx(110.0 * np.exp(-0.05) - 100.0 * np.exp(-0.02))
+        assert upper == pytest.approx(110.0 * np.exp(-0.05))
+
+    @pytest.mark.unit
+    def test_lower_bound_never_negative(self):
+        lower, _ = no_arbitrage_bounds(S=100.0, K=150.0, T=1.0, r=0.05, q=0.0, option_type='call')
+        assert lower == 0.0
+
+    @pytest.mark.unit
+    @pytest.mark.validation
+    def test_price_between_raw_intrinsic_and_discounted_bound_rejected(self, iv_calculator: IVCalculator,
+                                                                       forbid_solver):
+        """
+        Deep ITM call priced just above raw intrinsic (10.5) but below the discounted
+        lower bound (~14.4) is an arbitrage. It must be rejected by the bounds check
+        itself, before the solver runs (the old check let it through to the solver).
+        """
+        iv = iv_calculator.calculate_iv(S=100.0, K=90.0, T=1.0, r=0.05, market_price=10.5, q=0.0,
+                                        option_type='call')
+        assert iv is None
+
+    @pytest.mark.unit
+    @pytest.mark.validation
+    def test_call_price_above_spot_rejected(self, iv_calculator: IVCalculator, forbid_solver):
+        """A call can never be worth more than the (discounted) spot."""
+        iv = iv_calculator.calculate_iv(S=100.0, K=100.0, T=1.0, r=0.05, market_price=100.0, q=0.0,
+                                        option_type='call')
+        assert iv is None
+
+    @pytest.mark.unit
+    @pytest.mark.validation
+    def test_put_price_above_discounted_strike_rejected(self, iv_calculator: IVCalculator, forbid_solver):
+        iv = iv_calculator.calculate_iv(S=100.0, K=100.0, T=1.0, r=0.05, market_price=99.0, q=0.0,
+                                        option_type='put')
+        assert iv is None
+
+
+class TestSolverTolerance:
+    """The configured tolerance must actually reach the solver."""
+
+    @pytest.mark.unit
+    def test_xtol_passed_to_brentq(self, iv_calculator: IVCalculator, atm_call_option: OptionData,
+                                   monkeypatch):
+        from src.calculators import implied_volatility as module
+        from src.config.config import IVCalculationConfig
+
+        captured = {}
+        real_brentq = module.brentq
+
+        def spy(*args, **kwargs):
+            captured.update(kwargs)
+            return real_brentq(*args, **kwargs)
+
+        monkeypatch.setattr(module, 'brentq', spy)
+
+        price = BlackScholes.price(atm_call_option)
+        iv_calculator.calculate_iv(S=atm_call_option.S, K=atm_call_option.K, T=atm_call_option.T,
+                                   r=atm_call_option.r, q=atm_call_option.q, market_price=price,
+                                   option_type='call')
+
+        assert captured.get('xtol') == IVCalculationConfig.IV_CONVERGENCE_TOLERANCE
+
+    @pytest.mark.unit
+    @pytest.mark.calculation
+    def test_round_trip_accuracy(self, iv_calculator: IVCalculator):
+        """price -> IV -> price should reproduce the price to a tiny error."""
+        for sigma in (0.08, 0.2, 0.5, 1.2):
+            price = bs_call_price(S=100.0, K=105.0, T=0.5, r=0.03, sigma=sigma, q=0.01)
+            iv = iv_calculator.calculate_iv(S=100.0, K=105.0, T=0.5, r=0.03, q=0.01,
+                                            market_price=price, option_type='call')
+            assert iv is not None
+            assert abs(iv - sigma) < 1e-6
+
+
+class TestPricingSingleSource:
+    """Standalone helpers must agree with BlackScholes after de-duplication."""
+
+    @pytest.mark.unit
+    @pytest.mark.calculation
+    def test_put_call_parity_via_helpers(self):
+        S, K, T, r, q, sigma = 100.0, 95.0, 0.75, 0.03, 0.01, 0.3
+        call = bs_call_price(S, K, T, r, sigma, q)
+        put = bs_put_price(S, K, T, r, sigma, q)
+        assert call - put == pytest.approx(S * np.exp(-q * T) - K * np.exp(-r * T), abs=1e-9)
+
+    @pytest.mark.unit
+    @pytest.mark.edge_case
+    def test_black_scholes_class_handles_expiry(self):
+        """BlackScholes.price should return intrinsic value at T=0 rather than dividing by zero."""
+        assert BlackScholes.price(OptionData(S=110, K=100, T=0, r=0.05, sigma=0.2)) == 10.0
+        assert BlackScholes.price(OptionData(S=90, K=100, T=0, r=0.05, sigma=0.2, option_type='put')) == 10.0
