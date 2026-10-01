@@ -57,21 +57,24 @@ def apply_custom_style() -> None:
         </style>
     """, unsafe_allow_html=True)
 
-def calculate_ivs(options_df: pd.DataFrame, risk_free_rate: float, 
-                 dividend_yield: float) -> Tuple[List[float], List[Dict[str, Any]]]:
+def calculate_ivs(options_df: pd.DataFrame, risk_free_rate: float,
+                 dividend_yield_override: Optional[float] = None) -> Tuple[List[float], List[Dict[str, Any]]]:
     """
     Calculate IVs with proper progress tracking.
     
     Args:
         options_df: DataFrame containing option data
         risk_free_rate: Risk-free rate in decimal form
-        dividend_yield: Dividend yield in decimal form
+        dividend_yield_override: Dividend yield in decimal form to use for every option.
+            If None (the default), each option's own ``q`` column is used, which holds the
+            yield looked up for the ticker.
         
     Returns:
         Tuple of (list of IVs, list of valid option dictionaries)
         
     Example:
-        >>> ivs, valid_options = calculate_ivs(df, 0.045, 0.013)
+        >>> ivs, valid_options = calculate_ivs(df, 0.045)          # use fetched dividend yield
+        >>> ivs, valid_options = calculate_ivs(df, 0.045, 0.013)   # manual override
     """
     iv_calc = IVCalculator()
     ivs = []
@@ -97,7 +100,7 @@ def calculate_ivs(options_df: pd.DataFrame, risk_free_rate: float,
                 K=row['strike'],
                 T=row['T'],
                 r=risk_free_rate,  # Already in decimal form
-                q=dividend_yield,   # Already in decimal form
+                q=dividend_yield_override if dividend_yield_override is not None else row['q'],
                 market_price=row['price'],
                 option_type=row['type']
             )
@@ -265,6 +268,13 @@ def main() -> None:
                 help="Annual risk-free rate (e.g., 4.5 for 4.5%)"
             )
 
+            override_dividend = st.checkbox(
+                "Override dividend yield",
+                value=False,
+                help="By default the dividend yield is looked up for the ticker. "
+                     "Tick this box to enter your own value instead."
+            )
+
             dividend_yield = st.number_input(
                 "Dividend Yield (%)",
                 min_value=UIConfig.DIVIDEND_YIELD_MIN,
@@ -272,17 +282,18 @@ def main() -> None:
                 value=ModelConfig.DEFAULT_DIVIDEND_YIELD * 100,  # Convert to percentage
                 step=UIConfig.DIVIDEND_YIELD_STEP,
                 format="%.1f",
-                help="Annual dividend yield (e.g., 1.3 for 1.3%)"
+                disabled=not override_dividend,
+                help="Annual dividend yield (e.g., 1.3 for 1.3%). Only used when the override box is ticked."
             )
         
-        with st.expander("Visualization Settings", expanded=True):
+        with st.expander("Visualisation Settings", expanded=True):
             theme = st.selectbox(
                 "Theme",
                 options=UIConfig.AVAILABLE_THEMES
             )
             
             colormap = st.selectbox(
-                "Color Scheme",
+                "Colour Scheme",
                 options=UIConfig.AVAILABLE_COLORMAPS
             )
             
@@ -303,7 +314,7 @@ def main() -> None:
             'max_strike_pct': max_strike_pct,
             'min_volume': min_volume,
             'risk_free_rate': risk_free_rate,
-            'dividend_yield': dividend_yield,
+            'dividend_override_pct': dividend_yield if override_dividend else None,
             'theme': theme,
             'colormap': colormap,
             'y_axis_type': y_axis_type
@@ -320,7 +331,7 @@ def main() -> None:
                 
                 # Convert percentages to decimals
                 risk_free_decimal = risk_free_rate / 100
-                dividend_decimal = dividend_yield / 100
+                dividend_override = dividend_yield / 100 if override_dividend else None
                 
                 fetcher = OptionDataFetcher(ticker)
                 options_df = fetcher.prepare_for_iv(
@@ -340,10 +351,16 @@ def main() -> None:
                     return
                 
                 spot_price = options_df['S'].iloc[0]
-                st.success(f"Market data fetched - {ticker} @ ${spot_price:.2f}")
+                fetched_dividend = float(options_df['q'].iloc[0])
+                used_dividend = dividend_override if dividend_override is not None else fetched_dividend
+                dividend_source = "manual override" if dividend_override is not None else "looked up"
+                st.success(
+                    f"Market data fetched - {ticker} @ ${spot_price:.2f} | "
+                    f"dividend yield {used_dividend * 100:.2f}% ({dividend_source})"
+                )
                 
                 st.info("Computing implied volatilities...")
-                ivs, valid_options = calculate_ivs(options_df, risk_free_decimal, dividend_decimal)
+                ivs, valid_options = calculate_ivs(options_df, risk_free_decimal, dividend_override)
                 
                 if len(ivs) < MarketDataConfig.MIN_VALID_OPTIONS:
                     st.error(f"Insufficient valid options for analysis. Found only {len(ivs)} valid IVs.")
@@ -375,7 +392,9 @@ def main() -> None:
                     'ticker': ticker,
                     'ivs': ivs,
                     'valid_options': valid_options,
-                    'iv_stats': iv_stats
+                    'iv_stats': iv_stats,
+                    'dividend_yield_used': used_dividend,
+                    'dividend_source': dividend_source
                 }
                 st.session_state.should_generate = False
             
@@ -389,7 +408,7 @@ def main() -> None:
     if 'analysis_results' in st.session_state:
         results = st.session_state.analysis_results
         
-        # Main visualization
+        # Main visualisation
         st.plotly_chart(results['fig'], use_container_width=True)
         
         # Metrics in clean table format below visualization
@@ -415,6 +434,10 @@ def main() -> None:
         with col4:
             st.metric("Avg IV", f"{results['iv_stats']['avg_iv']:.1f}%")
             st.metric("IV Std Dev", f"{results['iv_stats']['iv_std']:.1f}%")
+        
+        st.caption(
+            f"Dividend yield used: {results['dividend_yield_used'] * 100:.2f}% ({results['dividend_source']})"
+        )
         
         # Export section
         st.markdown("---")

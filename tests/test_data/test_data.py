@@ -8,7 +8,7 @@ import pytest
 import pandas as pd
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
-from src.data.market_data import OptionDataFetcher
+from src.data.market_data import OptionDataFetcher, resolve_dividend_yield, MAX_PLAUSIBLE_DIVIDEND_YIELD
 
 
 class TestOptionDataFetcherInit:
@@ -136,12 +136,13 @@ class TestGetDividendYield:
     def test_get_dividend_yield_success(self):
         """Test successful dividend yield fetch."""
         with patch('src.data.market_data.yf.Ticker') as mock_ticker:
-            mock_ticker.return_value.info = {'dividendYield': 0.02}
+            mock_ticker.return_value.info = {'dividendYield': 2.0}
             
             fetcher = OptionDataFetcher('SPY')
             div_yield = fetcher.get_dividend_yield()
             
-            assert div_yield == 0.02
+            # With no unit-safe reference, dividendYield is read as a percentage
+            assert div_yield == pytest.approx(0.02)
             assert isinstance(div_yield, float)
     
     @pytest.mark.unit
@@ -362,3 +363,103 @@ class TestErrorHandling:
             
             with pytest.raises(ValueError):
                 fetcher._fetch_spot_price()
+
+
+class TestResolveDividendYield:
+    """Unit handling for Yahoo's dividendYield field (decimal vs percentage)."""
+
+    @pytest.mark.unit
+    def test_percentage_reading_chosen_when_rate_confirms_it(self):
+        """AAPL-like: dividendYield 0.32 means 0.32%, confirmed by rate/price."""
+        info = {'dividendYield': 0.32, 'dividendRate': 1.04, 'trailingAnnualDividendYield': 0.0031}
+        assert resolve_dividend_yield(info, spot_price=330.0) == pytest.approx(0.0032)
+
+    @pytest.mark.unit
+    def test_decimal_reading_chosen_when_rate_confirms_it(self):
+        """Older yfinance versions: dividendYield already a decimal."""
+        info = {'dividendYield': 0.0032, 'dividendRate': 1.04}
+        assert resolve_dividend_yield(info, spot_price=330.0) == pytest.approx(0.0032)
+
+    @pytest.mark.unit
+    def test_trailing_yield_used_as_reference_without_rate(self):
+        info = {'dividendYield': 1.13, 'trailingAnnualDividendYield': 0.0112}
+        assert resolve_dividend_yield(info) == pytest.approx(0.0113)
+
+    @pytest.mark.unit
+    def test_reference_wins_when_neither_reading_is_close(self):
+        info = {'dividendYield': 7.0, 'dividendRate': 1.0}
+        assert resolve_dividend_yield(info, spot_price=100.0) == pytest.approx(0.01)
+
+    @pytest.mark.unit
+    def test_trailing_only(self):
+        assert resolve_dividend_yield({'trailingAnnualDividendYield': 0.02}) == pytest.approx(0.02)
+
+    @pytest.mark.unit
+    def test_ambiguous_value_assumed_percentage(self):
+        """Safe default: a wrong guess gives ~0, never a 100x overstatement."""
+        assert resolve_dividend_yield({'dividendYield': 0.32}) == pytest.approx(0.0032)
+
+    @pytest.mark.unit
+    def test_non_payer(self):
+        assert resolve_dividend_yield({'dividendYield': 0.0}) == 0.0
+        assert resolve_dividend_yield({'dividendRate': 0.0, 'dividendYield': 0.5}, spot_price=100.0) == 0.0
+        assert resolve_dividend_yield({}) == 0.0
+
+    @pytest.mark.unit
+    def test_implausible_yield_rejected(self):
+        info = {'trailingAnnualDividendYield': 0.9}
+        assert resolve_dividend_yield(info) == 0.0
+        assert MAX_PLAUSIBLE_DIVIDEND_YIELD < 1.0
+
+    @pytest.mark.unit
+    @pytest.mark.validation
+    def test_non_numeric_and_negative_values_ignored(self):
+        info = {'dividendYield': 'n/a', 'dividendRate': None, 'trailingAnnualDividendYield': -0.01}
+        assert resolve_dividend_yield(info, spot_price=100.0) == 0.0
+        assert resolve_dividend_yield({'dividendYield': float('nan')}) == 0.0
+
+    @pytest.mark.unit
+    def test_get_dividend_yield_uses_spot_price(self):
+        with patch('src.data.market_data.yf.Ticker') as mock_ticker:
+            mock_ticker.return_value.info = {'dividendYield': 0.32, 'dividendRate': 1.04}
+            fetcher = OptionDataFetcher('AAPL')
+            assert fetcher.get_dividend_yield(spot_price=330.0) == pytest.approx(0.0032)
+
+    @pytest.mark.unit
+    def test_get_dividend_yield_handles_non_dict_info(self):
+        with patch('src.data.market_data.yf.Ticker') as mock_ticker:
+            mock_ticker.return_value.info = None
+            assert OptionDataFetcher('SPY').get_dividend_yield() == 0.0
+
+    @pytest.mark.unit
+    def test_prepare_dataframe_passes_spot_to_resolver(self):
+        """The q column should reflect the unit-safe yield, not the raw Yahoo number."""
+        with patch('src.data.market_data.yf.Ticker') as mock_ticker:
+            mock_ticker.return_value.info = {'dividendYield': 0.32, 'dividendRate': 1.04}
+            fetcher = OptionDataFetcher('AAPL')
+            today = pd.Timestamp.now().normalize()
+            df = fetcher._prepare_dataframe(
+                option_data=[{'expiration': today + timedelta(days=30), 'strike': 330.0, 'price': 10.0,
+                              'type': 'call', 'volume': 10, 'days_to_expiry': 30}],
+                spot_price=330.0, risk_free_rate=0.04)
+            assert df['q'].iloc[0] == pytest.approx(0.0032)
+
+
+class TestResolveDividendYieldRealYahooData:
+    """Values captured from yfinance 1.7.0 (dividendYield is reported as a percentage)."""
+
+    @pytest.mark.unit
+    def test_aapl_real_values(self):
+        info = {'dividendYield': 0.33, 'dividendRate': 1.08, 'trailingAnnualDividendYield': 0.0031876138}
+        assert resolve_dividend_yield(info, spot_price=333.02) == pytest.approx(0.0033)
+
+    @pytest.mark.unit
+    def test_spy_real_values_no_dividend_rate(self):
+        """ETFs have no dividendRate; the trailing yield acts as the unit reference."""
+        info = {'dividendYield': 0.98, 'dividendRate': None, 'trailingAnnualDividendYield': 0.0074090553}
+        assert resolve_dividend_yield(info, spot_price=762.63) == pytest.approx(0.0098)
+
+    @pytest.mark.unit
+    def test_tsla_real_values_non_payer(self):
+        info = {'dividendYield': None, 'dividendRate': None, 'trailingAnnualDividendYield': 0.0}
+        assert resolve_dividend_yield(info, spot_price=354.81) == 0.0

@@ -6,14 +6,67 @@ logging, and data quality validation. All functions include complete type hints
 for better IDE support and type safety.
 """
 
+import math
+import numbers
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import List, Dict, Tuple, Optional
+from typing import Any, List, Dict, Mapping, Tuple, Optional
 from src.utils.logger import setup_logger
 from src.config.config import MarketDataConfig, ModelConfig
 
 logger = setup_logger(__name__)
+
+# Dividend yields above this are treated as bad data (a unit error, not a real yield)
+MAX_PLAUSIBLE_DIVIDEND_YIELD = 0.25
+
+
+def _as_non_negative_float(value: Any) -> Optional[float]:
+    """Return ``value`` as a finite, non-negative float, or None if it is not a real number."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return None
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        return None
+    return number
+
+
+def resolve_dividend_yield(info: Mapping[str, Any], spot_price: Optional[float] = None) -> float:
+    """
+    Return the dividend yield as a decimal (0.013 = 1.3%) from Yahoo ``info`` fields.
+
+    Yahoo's ``dividendYield`` is a percentage, so it is checked against ``dividendRate / spot``
+    (or ``trailingAnnualDividendYield``) to pick the right units. Returns 0.0 if unavailable.
+    """
+    raw = _as_non_negative_float(info.get('dividendYield'))
+    trailing = _as_non_negative_float(info.get('trailingAnnualDividendYield'))
+    rate = _as_non_negative_float(info.get('dividendRate'))
+    spot = _as_non_negative_float(spot_price)
+
+    reference: Optional[float] = None
+    if rate is not None and spot:
+        reference = rate / spot
+    elif trailing is not None:
+        reference = trailing
+
+    if raw is None:
+        result = reference if reference is not None else 0.0
+    elif raw == 0:
+        result = 0.0
+    elif reference is None:
+        result = raw / 100.0  # assume percentage (the safe mistake, see above)
+    elif reference == 0:
+        result = 0.0
+    else:
+        as_decimal, as_percent = raw, raw / 100.0
+        closer = min((as_decimal, as_percent), key=lambda reading: abs(math.log(reading / reference)))
+        result = closer if abs(math.log(closer / reference)) <= math.log(3) else reference
+
+    if result > MAX_PLAUSIBLE_DIVIDEND_YIELD:
+        logger.warning(f"Implausible dividend yield {result:.4f} rejected; using 0.0")
+        return 0.0
+
+    return float(result)
 
 
 class OptionDataFetcher:
@@ -253,7 +306,7 @@ class OptionDataFetcher:
         # Add market data
         options_df['S'] = spot_price
         options_df['r'] = risk_free_rate
-        options_df['q'] = self.get_dividend_yield()
+        options_df['q'] = self.get_dividend_yield(spot_price)
         options_df['moneyness'] = options_df['strike'] / spot_price
         
         return options_df
@@ -276,16 +329,14 @@ class OptionDataFetcher:
         logger.info(f"Strike range: ${df['strike'].min():.2f} - ${df['strike'].max():.2f}")
         logger.info(f"Moneyness range: {df['moneyness'].min():.2f} - {df['moneyness'].max():.2f}")
     
-    def get_dividend_yield(self) -> float:
-        """
-        Get dividend yield from ticker info.
-        
-        Returns:
-            Dividend yield (0.0 if not available)
-        """
+    def get_dividend_yield(self, spot_price: Optional[float] = None) -> float:
+        """Return the dividend yield as a decimal, e.g. 0.013 for 1.3% (0.0 if unavailable)."""
         try:
-            div_yield = self.ticker.info.get('dividendYield', 0.0)
-            return div_yield if div_yield is not None else 0.0
+            info = self.ticker.info
+            if not isinstance(info, dict):
+                logger.warning("Ticker info unavailable; assuming no dividend yield")
+                return 0.0
+            return resolve_dividend_yield(info, spot_price)
         except Exception as e:
             logger.warning(f"Could not retrieve dividend yield: {str(e)}")
             return 0.0
