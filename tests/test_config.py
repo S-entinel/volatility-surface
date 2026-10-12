@@ -226,7 +226,7 @@ class TestUIConfig:
     @pytest.mark.unit
     def test_cache_settings(self):
         """Test cache configuration."""
-        assert UIConfig.CACHE_TTL_SECONDS == 300
+        assert UIConfig.CACHE_TTL_SECONDS == 900
         assert isinstance(UIConfig.CACHE_TTL_SECONDS, int)
         assert UIConfig.CACHE_TTL_SECONDS > 0
 
