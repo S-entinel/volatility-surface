@@ -9,7 +9,7 @@ from src.data.market_data import OptionDataFetcher
 from src.data.option_selection import select_otm_options
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
-from src.config.config import MarketDataConfig, StatisticsConfig
+from src.config.config import MarketDataConfig, ModelConfig, StatisticsConfig, UIConfig
 
 StatusCallback = Callable[[str, str], None]    # (kind: 'info' or 'success', message)
 ProgressCallback = Callable[[int, int], None]  # (options done, options total)
@@ -57,6 +57,32 @@ def fetch_options(params: AnalysisParams) -> pd.DataFrame:
         raise AnalysisError("No valid options data found.")
     
     return options_df
+
+
+def fetch_full_chain(ticker: str) -> pd.DataFrame:
+    """Fetch every usable contract in the widest strike window, with no open interest limit."""
+    options_df = OptionDataFetcher(ticker).prepare_for_iv(
+        min_strike_pct=UIConfig.MIN_STRIKE_PCT_LOWER,
+        max_strike_pct=UIConfig.MAX_STRIKE_PCT_UPPER,
+        min_open_interest=MarketDataConfig.MIN_OPEN_INTEREST_THRESHOLD,
+        risk_free_rate=ModelConfig.DEFAULT_RISK_FREE_RATE
+    )
+    
+    if options_df.empty:
+        raise AnalysisError("No valid options data found.")
+    
+    return options_df
+
+
+def filter_chain(chain: pd.DataFrame, params: AnalysisParams) -> pd.DataFrame:
+    """Keep the contracts inside the chosen strike range with enough open interest."""
+    lowest = chain['S'] * params.min_strike_pct / 100
+    highest = chain['S'] * params.max_strike_pct / 100
+    open_interest = chain['open_interest'].fillna(0) if 'open_interest' in chain else pd.Series(0, index=chain.index)
+    
+    keep = (chain['strike'] >= lowest) & (chain['strike'] <= highest) & \
+           (open_interest >= int(params.min_open_interest))
+    return chain[keep]
 
 
 def calculate_ivs(options_df: pd.DataFrame, risk_free_rate: float,
@@ -224,16 +250,16 @@ def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price:
     return fig, list(plotter.skipped_slice_days)
 
 
-def run_analysis(params: AnalysisParams, on_status: Optional[StatusCallback] = None,
-                 on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
-    """Fetch, select out-of-the-money options, solve the IVs and build the figure."""
+def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Optional[StatusCallback] = None,
+                  on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
+    """Filter a fetched chain, select out-of-the-money options, solve the IVs and build the figure."""
     def report(kind: str, message: str) -> None:
         if on_status is not None:
             on_status(kind, message)
     
-    report('info', "Fetching market data...")
-    
-    options_df = fetch_options(params)
+    options_df = filter_chain(chain, params)
+    if options_df.empty:
+        raise AnalysisError("No valid options data found.")
     
     spot_price = options_df['S'].iloc[0]
     fetched_dividend = float(options_df['q'].iloc[0])
@@ -278,3 +304,12 @@ def run_analysis(params: AnalysisParams, on_status: Optional[StatusCallback] = N
         'n_puts': sum(1 for opt in valid_options if opt['type'] == 'put'),
         'n_calls': sum(1 for opt in valid_options if opt['type'] == 'call')
     }
+
+
+def run_analysis(params: AnalysisParams, on_status: Optional[StatusCallback] = None,
+                 on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
+    """Fetch the chain for the chosen ticker and analyse it."""
+    if on_status is not None:
+        on_status('info', "Fetching market data...")
+    
+    return analyse_chain(fetch_options(params), params, on_status, on_progress)

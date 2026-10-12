@@ -138,7 +138,7 @@ class UIConfig:
     AVAILABLE_Y_AXIS_TYPES: List[str] = ["Strike Price ($)", "Moneyness"]
     
     # Cache settings
-    CACHE_TTL_SECONDS: int = 300  # 5 minutes
+    CACHE_TTL_SECONDS: int = 900  # 15 minutes
 
 
 class LoggingConfig:

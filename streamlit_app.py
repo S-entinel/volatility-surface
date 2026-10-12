@@ -3,8 +3,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from typing import Tuple, Dict, Any
-from src.analysis import AnalysisError, AnalysisParams, run_analysis
+from typing import Tuple, Dict, Any, Optional
+from src.analysis import AnalysisError, AnalysisParams, analyse_chain, fetch_full_chain
 from src.config.config import (
     UIConfig, 
     MarketDataConfig, 
@@ -74,23 +74,14 @@ class ProgressDisplay:
             self.text.empty()
 
 
-def session_summary(params: AnalysisParams) -> Dict[str, Any]:
-    """The record kept in ``st.session_state.current_params``."""
-    return {
-        'ticker': params.ticker,
-        'min_strike_pct': params.min_strike_pct,
-        'max_strike_pct': params.max_strike_pct,
-        'min_open_interest': params.min_open_interest,
-        'risk_free_rate': params.risk_free_rate,
-        'dividend_override_pct': params.dividend_yield if params.override_dividend else None,
-        'theme': params.theme,
-        'colormap': params.colormap,
-        'y_axis_type': params.y_axis_type
-    }
+@st.cache_data(ttl=UIConfig.CACHE_TTL_SECONDS, show_spinner=False)
+def cached_chain(ticker: str) -> Tuple[pd.DataFrame, datetime]:
+    """The full option chain for a ticker and when it was fetched, reused between reruns."""
+    return fetch_full_chain(ticker), datetime.now()
 
 
 def render_sidebar() -> Tuple[AnalysisParams, bool]:
-    """Draw the sidebar; return the chosen parameters and whether the button was clicked."""
+    """Draw the sidebar; return the chosen parameters and whether Refresh data was clicked."""
     with st.sidebar:
         with st.expander("Market Data Configuration", expanded=True):
             ticker = st.text_input(
@@ -170,7 +161,11 @@ def render_sidebar() -> Tuple[AnalysisParams, bool]:
                 options=UIConfig.AVAILABLE_Y_AXIS_TYPES
             )
         
-        generate = st.button("Generate Analysis", use_container_width=True)
+        refresh = st.button(
+            "Refresh data",
+            use_container_width=True,
+            help="Fetch fresh prices instead of reusing the data from the last few minutes."
+        )
 
     params = AnalysisParams(
         ticker=ticker,
@@ -184,10 +179,10 @@ def render_sidebar() -> Tuple[AnalysisParams, bool]:
         colormap=colormap,
         y_axis_type=y_axis_type
     )
-    return params, generate
+    return params, refresh
 
 
-def render_results(results: Dict[str, Any]) -> None:
+def render_results(results: Dict[str, Any], fetched_at: Optional[datetime] = None) -> None:
     """Draw the chart, metrics, captions and the CSV export button."""
     # Main visualisation
     st.plotly_chart(results['fig'], use_container_width=True)
@@ -229,6 +224,11 @@ def render_results(results: Dict[str, Any]) -> None:
     st.caption(
         f"Dividend yield used: {results['dividend_yield_used'] * 100:.2f}% ({results['dividend_source']})"
     )
+    if fetched_at is not None:
+        st.caption(
+            f"Data fetched at {fetched_at:%H:%M:%S}, reused for up to {UIConfig.CACHE_TTL_SECONDS // 60} "
+            f"minutes. Use Refresh data for the latest prices."
+        )
     
     # Export section
     st.markdown("---")
@@ -266,36 +266,45 @@ def main() -> None:
     
     st.title("Implied Volatility Surface Analysis")
     
-    params, generate = render_sidebar()
-
-    # Remember that the button was clicked
-    if generate:
-        st.session_state.should_generate = True
-        st.session_state.current_params = session_summary(params)
+    params, refresh = render_sidebar()
     
-    # Run when the button was clicked, and also on first load while there are no saved results
-    if st.session_state.get('should_generate', False) or 'analysis_results' not in st.session_state:
-        
-        status = st.empty()
-        
-        try:
-            with status.container():
-                try:
-                    st.session_state.analysis_results = run_analysis(params, show_status, ProgressDisplay())
-                except AnalysisError as e:
-                    st.error(str(e))
-                    return
-                st.session_state.should_generate = False
-            
-            status.empty()
-            
-        except Exception as e:
-            st.error(f"Analysis Error: {str(e)}")
-            return
+    if refresh:
+        cached_chain.clear()
+        st.session_state.pop('fetch_error', None)
     
-    # Display results if available (either just generated or from previous generation)
-    if 'analysis_results' in st.session_state:
-        render_results(st.session_state.analysis_results)
+    # A failed fetch is not repeated on every widget change; Refresh data retries it
+    saved_error = st.session_state.get('fetch_error')
+    if saved_error and saved_error['ticker'] == params.ticker:
+        st.error(saved_error['text'])
+        return
+    
+    try:
+        with st.spinner("Fetching market data..."):
+            chain, fetched_at = cached_chain(params.ticker)
+    except Exception as e:
+        text = str(e) if isinstance(e, AnalysisError) else f"Analysis Error: {str(e)}"
+        st.session_state.fetch_error = {'ticker': params.ticker, 'text': text}
+        st.error(text)
+        return
+    
+    st.session_state.pop('analysis_results', None)
+    status = st.empty()
+    
+    try:
+        with status.container():
+            try:
+                st.session_state.analysis_results = analyse_chain(chain, params, show_status, ProgressDisplay())
+            except AnalysisError as e:
+                st.error(str(e))
+                return
+        
+        status.empty()
+        
+    except Exception as e:
+        st.error(f"Analysis Error: {str(e)}")
+        return
+    
+    render_results(st.session_state.analysis_results, fetched_at)
 
 
 if __name__ == "__main__":
