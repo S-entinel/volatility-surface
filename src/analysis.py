@@ -252,6 +252,90 @@ def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price:
     return fig, list(plotter.skipped_slice_days)
 
 
+def expiry_labels(results: Dict[str, Any]) -> Dict[int, str]:
+    """The expiries in the results as {days to expiry: label}, shortest first."""
+    labels = {}
+    for opt in results['valid_options']:
+        days = int(opt['days_to_expiry'])
+        if days not in labels:
+            expiry = opt.get('expiration')
+            labels[days] = f"{days} days ({pd.Timestamp(expiry):%d %b %Y})" if expiry is not None else f"{days} days"
+    return dict(sorted(labels.items()))
+
+
+def _expiry_points(results: Dict[str, Any], expiry_days: int) -> Tuple[List[Any], List[float]]:
+    """The options and implied volatilities (decimals) for one expiry."""
+    pairs = [(opt, iv) for opt, iv in zip(results['valid_options'], results['ivs'])
+             if int(opt['days_to_expiry']) == expiry_days]
+    return [opt for opt, _ in pairs], [iv for _, iv in pairs]
+
+
+def smile_stats(results: Dict[str, Any], expiry_days: int) -> Dict[str, Any]:
+    """ATM volatility and skew for a single expiry, defined as in the key figures."""
+    options, ivs = _expiry_points(results, expiry_days)
+    return calculate_iv_statistics(options, ivs, results['spot_price'])
+
+
+def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: str) -> go.Figure:
+    """Implied volatility against strike for one expiry, with puts and calls in different colours."""
+    options, ivs = _expiry_points(results, expiry_days)
+    spot = results['spot_price']
+    use_moneyness = y_axis_type == "Moneyness"
+    font = 'IBM Plex Mono, monospace'
+    grid = 'rgb(38, 38, 38)'
+    multiplier = StatisticsConfig.IV_DISPLAY_MULTIPLIER
+    
+    def x_value(opt) -> float:
+        return float(opt['strike']) / spot if use_moneyness else float(opt['strike'])
+    
+    ordered = sorted(zip(options, ivs), key=lambda pair: x_value(pair[0]))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=[x_value(opt) for opt, _ in ordered], y=[iv * multiplier for _, iv in ordered],
+        mode='lines', line=dict(color='rgb(70, 70, 70)', width=1), hoverinfo='skip', showlegend=False
+    ))
+    
+    for option_type, name, colour in (('put', 'Puts', '#35b779'), ('call', 'Calls', '#fde725')):
+        for source, suffix, symbol in (('mid', '', 'circle'), ('last', ' (last price)', 'circle-open')):
+            points = [(opt, iv) for opt, iv in ordered
+                      if opt['type'] == option_type and (opt.get('price_source') or 'mid') == source]
+            if not points:
+                continue
+            fig.add_trace(go.Scatter(
+                x=[x_value(opt) for opt, _ in points],
+                y=[iv * multiplier for _, iv in points],
+                mode='markers',
+                name=name + suffix,
+                marker=dict(color=colour, size=9, symbol=symbol, line=dict(width=2, color=colour)),
+                customdata=[[float(opt['strike']), float(opt['price']), opt.get('open_interest')] for opt, _ in points],
+                hovertemplate=(
+                    f"<b>{name}</b><br>Strike: $%{{customdata[0]:,.2f}}<br>"
+                    "Implied volatility: %{y:.1f}%<br>Price: $%{customdata[1]:.2f}"
+                    "<br>Open interest: %{customdata[2]}<extra></extra>"
+                )
+            ))
+    
+    if options and 'forward' in options[0]:
+        forward = float(options[0]['forward'])
+        fig.add_vline(x=forward / spot if use_moneyness else forward, line_dash='dot',
+                      line_color='rgb(120, 120, 120)', annotation_text="forward",
+                      annotation_font=dict(color='rgb(160, 160, 160)', size=11, family=font))
+    
+    fig.update_layout(
+        paper_bgcolor='rgb(0, 0, 0)', plot_bgcolor='rgb(0, 0, 0)',
+        font=dict(family=font, color='white'),
+        xaxis=dict(title='Moneyness (strike / spot)' if use_moneyness else 'Strike price ($)',
+                   tickformat='.2f' if use_moneyness else ',.0f', tickprefix='' if use_moneyness else '$',
+                   gridcolor=grid, zeroline=False),
+        yaxis=dict(title='Implied volatility (%)', ticksuffix='%', gridcolor=grid, zeroline=False),
+        legend=dict(orientation='h', x=0, y=1.1),
+        margin=dict(l=60, r=20, t=40, b=60),
+        height=480,
+        hovermode='closest'
+    )
+    return fig
+
+
 def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Optional[StatusCallback] = None,
                   on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
     """Filter a fetched chain, select out-of-the-money options, solve the IVs and build the figure."""

@@ -4,7 +4,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from typing import Tuple, Dict, Any
-from src.analysis import AnalysisError, AnalysisParams, analyse_chain, fetch_full_chain
+from src.analysis import (
+    AnalysisError, AnalysisParams, analyse_chain, build_smile_figure, expiry_labels, fetch_full_chain, smile_stats
+)
 from src.config.config import (
     UIConfig, 
     MarketDataConfig, 
@@ -211,7 +213,32 @@ def results_table(results: Dict[str, Any]) -> pd.DataFrame:
     })
 
 
-def render_results(results: Dict[str, Any]) -> None:
+# Only the smile panel reruns when an expiry is picked, so choosing one is instant
+fragment = getattr(st, "fragment", lambda func: func)
+
+
+@fragment
+def render_smile_tab(results: Dict[str, Any], y_axis_type: str) -> None:
+    """Pick an expiry and show its implied volatility smile."""
+    labels = expiry_labels(results)
+    days = list(labels)
+    chosen = st.selectbox(
+        "Expiry",
+        options=days,
+        index=days.index(min(days, key=lambda d: abs(d - 30))),
+        format_func=lambda d: labels[d]
+    )
+    
+    stats = smile_stats(results, chosen)
+    skew = f"{stats['iv_skew']:.1f}%" if stats['iv_skew'] is not None else "N/A"
+    st.caption(
+        f"At this expiry: ATM IV {stats['atm_iv']:.1f}% · skew {skew} (out-of-the-money put minus call). "
+        f"Open circles are last traded prices, not live quotes."
+    )
+    st.plotly_chart(build_smile_figure(results, chosen, y_axis_type), use_container_width=True)
+
+
+def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
     """Draw the header, the key figures, and the Surface and Data & Export tabs."""
     expiries = len({opt['days_to_expiry'] for opt in results['valid_options']})
     stats = results['iv_stats']
@@ -232,10 +259,13 @@ def render_results(results: Dict[str, Any]) -> None:
     col4.metric("IV Range", f"{stats['iv_min']:.1f}% - {stats['iv_max']:.1f}%",
                 help="Lowest and highest implied volatility across all points.")
     
-    surface_tab, data_tab = st.tabs(["Surface", "Data & Export"])
+    surface_tab, smile_tab, data_tab = st.tabs(["Surface", "Smile & Skew", "Data & Export"])
     
     with surface_tab:
         st.plotly_chart(results['fig'], use_container_width=True)
+    
+    with smile_tab:
+        render_smile_tab(results, y_axis_type)
     
     with data_tab:
         table = results_table(results)
@@ -299,7 +329,7 @@ def main() -> None:
         st.error(f"Analysis Error: {str(e)}")
         return
     
-    render_results(st.session_state.analysis_results)
+    render_results(st.session_state.analysis_results, params.y_axis_type)
 
 
 if __name__ == "__main__":

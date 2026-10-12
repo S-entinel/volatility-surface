@@ -167,7 +167,7 @@ class TestLayout:
     def test_tabs(self):
         at, _ = open_app(make_chain())
 
-        assert [t.label for t in at.tabs] == ["Surface", "Data & Export"]
+        assert [t.label for t in at.tabs] == ["Surface", "Smile & Skew", "Data & Export"]
 
     @pytest.mark.integration
     def test_table_has_one_row_per_point(self):
@@ -190,12 +190,27 @@ class TestLayout:
         assert surface.colorscale[0][1] == '#440154'  # the dark purple at the bottom of Viridis
 
 
+class TestSmileTab:
+    @pytest.mark.integration
+    def test_defaults_to_the_expiry_nearest_30_days(self):
+        at, _ = open_app(make_chain(days=(14, 45, 90, 180)))
+
+        assert widget(at.selectbox, "Expiry").value == 45
+
+    @pytest.mark.integration
+    def test_another_expiry_can_be_picked(self):
+        at, _ = open_app(make_chain(), [lambda a: widget(a.selectbox, "Expiry").set_value(90).run()])
+
+        assert len(at.exception) == 0
+        assert widget(at.selectbox, "Expiry").value == 90
+
+
 class TestSidebar:
     @pytest.mark.integration
     def test_there_is_no_colour_or_theme_choice(self):
         at, _ = open_app(make_chain())
 
-        assert [s.label for s in at.selectbox] == ["Strike axis"]
+        assert [s.label for s in at.selectbox if s.label != "Expiry"] == ["Strike axis"]
 
     @pytest.mark.integration
     def test_strike_range_is_one_slider_with_the_default_window(self):
