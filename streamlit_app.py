@@ -282,7 +282,7 @@ def render_sidebar() -> Tuple[AnalysisParams, bool]:
                 min_value=MarketDataConfig.MIN_OPEN_INTEREST_THRESHOLD,
                 value=MarketDataConfig.DEFAULT_MIN_OPEN_INTEREST,
                 help="Contracts with fewer open positions than this are ignored. "
-                     "Unlike daily volume, open interest does not reset overnight."
+                     "Yahoo often reports no open interest before the US market opens, so 0 keeps everything."
             )
         
         with st.expander("Model Parameters", expanded=True):

@@ -18,8 +18,8 @@ class MarketDataConfig:
     DEFAULT_MIN_STRIKE_PCT: float = 75.0
     DEFAULT_MAX_STRIKE_PCT: float = 125.0
     
-    # Liquidity filtering (open interest persists overnight; daily volume does not)
-    DEFAULT_MIN_OPEN_INTEREST: int = 10
+    # Liquidity filtering
+    DEFAULT_MIN_OPEN_INTEREST: int = 0
     MIN_OPEN_INTEREST_THRESHOLD: int = 0  # Absolute minimum
 
     # Quote quality filtering
