@@ -12,7 +12,8 @@ from streamlit.testing.v1 import AppTest
 from src.calculators.implied_volatility import bs_call_price, bs_put_price
 from src.config.config import MarketDataConfig, UIConfig
 
-APP_PATH = str(Path(__file__).resolve().parents[2] / "streamlit_app.py")
+APP_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "streamlit_app.py").exists())
+APP_PATH = str(APP_ROOT / "streamlit_app.py")
 FETCH = 'src.data.market_data.OptionDataFetcher.prepare_for_iv'
 
 SPOT, RATE, DIVIDEND, VOL = 100.0, 0.015, 0.01, 0.20
