@@ -5,8 +5,8 @@ import pandas as pd
 from datetime import datetime
 from typing import Tuple, Dict, Any
 from src.analysis import (
-    AnalysisError, AnalysisParams, analyse_chain, build_smile_figure, expiry_labels, fetch_full_chain,
-    figure_html, smile_stats
+    AnalysisError, AnalysisParams, analyse_chain, build_heatmap_figure, build_smile_figure, expiry_labels,
+    fetch_full_chain, figure_html, smile_stats
 )
 from src.config.config import (
     UIConfig, 
@@ -239,6 +239,21 @@ def render_smile_tab(results: Dict[str, Any], y_axis_type: str) -> None:
     st.plotly_chart(build_smile_figure(results, chosen, y_axis_type), use_container_width=True)
 
 
+@fragment
+def render_surface_tab(results: Dict[str, Any], y_axis_type: str) -> None:
+    """The implied volatility surface, as a 3D chart or a 2D heatmap."""
+    view_column, points_column = st.columns([1, 1])
+    view = view_column.radio("View", ["3D surface", "Heatmap"], horizontal=True, key="surface_view",
+                             label_visibility="collapsed")
+    if view == "Heatmap":
+        show_points = points_column.toggle("Show data points", value=False, key="heatmap_points")
+        st.plotly_chart(build_heatmap_figure(results, y_axis_type, show_points), use_container_width=True)
+        st.caption("The dotted line is the forward price. Time is drawn on a square root scale "
+                   "so short expiries are easier to see.")
+    else:
+        st.plotly_chart(results['fig'], use_container_width=True)
+
+
 def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
     """Draw the header, the key figures, and the Surface and Data & Export tabs."""
     expiries = len({opt['days_to_expiry'] for opt in results['valid_options']})
@@ -263,7 +278,7 @@ def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
     surface_tab, smile_tab, data_tab = st.tabs(["Surface", "Smile & Skew", "Data & Export"])
     
     with surface_tab:
-        st.plotly_chart(results['fig'], use_container_width=True)
+        render_surface_tab(results, y_axis_type)
     
     with smile_tab:
         render_smile_tab(results, y_axis_type)
@@ -272,6 +287,9 @@ def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
         table = results_table(results)
         st.dataframe(table, use_container_width=True, hide_index=True)
         today = datetime.now().strftime('%Y%m%d')
+        heatmap = st.session_state.get('surface_view') == "Heatmap"
+        chart = (build_heatmap_figure(results, y_axis_type, st.session_state.get('heatmap_points', False))
+                 if heatmap else results['fig'])
         csv_column, html_column, _ = st.columns([1, 1, 2])
         csv_column.download_button(
             "Export data (CSV)",
@@ -281,11 +299,11 @@ def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
             use_container_width=True
         )
         html_column.download_button(
-            "Export surface (HTML)",
-            data=figure_html(results['fig']).encode('utf-8'),
-            file_name=f"{results['ticker']}_iv_surface_{today}.html",
+            "Export chart (HTML)",
+            data=figure_html(chart).encode('utf-8'),
+            file_name=f"{results['ticker']}_iv_{'heatmap' if heatmap else 'surface'}_{today}.html",
             mime='text/html',
-            help="An interactive copy of the surface that opens in any browser. It needs an internet connection to load.",
+            help="An interactive copy of the chart you are viewing that opens in any browser. It needs an internet connection to load.",
             use_container_width=True
         )
 

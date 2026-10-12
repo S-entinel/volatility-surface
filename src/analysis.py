@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+from scipy.interpolate import griddata
 import plotly.graph_objects as go
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -331,6 +332,88 @@ def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: s
         legend=dict(orientation='h', x=0, y=1.1),
         margin=dict(l=60, r=20, t=40, b=60),
         height=480,
+        hovermode='closest'
+    )
+    return fig
+
+
+def build_heatmap_figure(results: Dict[str, Any], y_axis_type: str, show_points: bool = False) -> go.Figure:
+    """The surface as a 2D heatmap of implied volatility over strike and expiry."""
+    options, ivs, spot = results['valid_options'], results['ivs'], results['spot_price']
+    use_moneyness = y_axis_type == "Moneyness"
+    font = 'IBM Plex Mono, monospace'
+    multiplier = StatisticsConfig.IV_DISPLAY_MULTIPLIER
+    
+    def x_value(strike: float) -> float:
+        return float(strike) / spot if use_moneyness else float(strike)
+    
+    point_x = np.array([x_value(opt['strike']) for opt in options])
+    point_root = np.sqrt(np.array([opt['T'] for opt in options], dtype=float))
+    
+    # Own grid for the heatmap: rows evenly spaced in the square root of time, which gives the crowded
+    # short expiries more rows, and interpolation on axes scaled to the same range
+    size = 80
+    x = np.linspace(point_x.min(), point_x.max(), size)
+    roots = np.linspace(point_root.min(), point_root.max(), size)
+    x_span = (point_x.max() - point_x.min()) or 1.0
+    root_span = (point_root.max() - point_root.min()) or 1.0
+    grid_x, grid_root = np.meshgrid(x, roots)
+    z = griddata(
+        np.column_stack(((point_root - point_root.min()) / root_span, (point_x - point_x.min()) / x_span)),
+        np.array(ivs), ((grid_root - point_root.min()) / root_span, (grid_x - point_x.min()) / x_span),
+        method='linear'
+    ) * multiplier
+    maturities = roots ** 2
+    
+    # Time is drawn on a square root scale so the crowded short expiries get room; ticks are in years
+    tick_years = [t for t in (0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3) if maturities[0] <= t <= maturities[-1]]
+    
+    hover_x = 'Moneyness: %{x:.3f}' if use_moneyness else 'Strike: $%{x:,.0f}'
+    fig = go.Figure()
+    fig.add_trace(go.Heatmap(
+        x=x, y=roots, z=z, colorscale='Viridis', zsmooth='best',
+        customdata=np.repeat(maturities[:, None], len(x), axis=1),
+        hovertemplate='Expiry: %{customdata:.2f} years<br>' + hover_x + '<br>Implied volatility: %{z:.1f}%<extra></extra>',
+        colorbar=dict(title=dict(text='Implied volatility', side='top', font=dict(size=12, family=font)),
+                      thickness=14, len=0.8, tickformat='.0f', ticksuffix='%',
+                      tickfont=dict(size=11, family=font))
+    ))
+    
+    if show_points:
+        for source, name, symbol in (('mid', 'Live quotes', 'circle'), ('last', 'Last traded prices', 'circle-open')):
+            points = [(opt, iv) for opt, iv in zip(options, ivs) if (opt.get('price_source') or 'mid') == source]
+            if not points:
+                continue
+            fig.add_trace(go.Scatter(
+                x=[x_value(opt['strike']) for opt, _ in points], y=[np.sqrt(opt['T']) for opt, _ in points],
+                mode='markers', name=name,
+                marker=dict(size=3, symbol=symbol, color='rgba(255, 255, 255, 0.55)', line=dict(width=1)),
+                customdata=[[opt['type'], float(opt['strike']), int(opt['days_to_expiry']), iv * multiplier]
+                            for opt, iv in points],
+                hovertemplate=('%{customdata[0]} at $%{customdata[1]:,.2f}<br>%{customdata[2]} days to expiry'
+                               '<br>Implied volatility: %{customdata[3]:.1f}%<extra></extra>')
+            ))
+    
+    if options and 'forward' in options[0]:
+        forwards = {float(opt['T']): x_value(opt['forward']) for opt in options}
+        times = sorted(forwards)
+        fig.add_trace(go.Scatter(
+            x=[forwards[t] for t in times], y=np.sqrt(times), mode='lines', hoverinfo='skip',
+            line=dict(color='rgba(255, 255, 255, 0.6)', width=1, dash='dot'), showlegend=False
+        ))
+    
+    fig.update_layout(
+        paper_bgcolor='rgb(0, 0, 0)', plot_bgcolor='rgb(0, 0, 0)',
+        font=dict(family=font, color='white'),
+        xaxis=dict(title='Moneyness (strike / spot)' if use_moneyness else 'Strike price ($)',
+                   tickformat='.2f' if use_moneyness else ',.0f', tickprefix='' if use_moneyness else '$',
+                   showgrid=False, zeroline=False),
+        yaxis=dict(title='Time to expiry (years)', tickmode='array', tickvals=list(np.sqrt(tick_years)),
+                   ticktext=[f"{t:g}" for t in tick_years], showgrid=False, zeroline=False),
+        legend=dict(orientation='h', x=0, y=1.08),
+        showlegend=show_points,
+        margin=dict(l=70, r=20, t=40, b=60),
+        height=560,
         hovermode='closest'
     )
     return fig

@@ -205,6 +205,16 @@ class TestSmileTab:
         assert widget(at.selectbox, "Expiry").value == 90
 
 
+class TestHeatmapView:
+    @pytest.mark.integration
+    def test_the_surface_can_be_switched_to_a_heatmap(self):
+        at, _ = open_app(make_chain(), [lambda a: a.radio[0].set_value("Heatmap").run()])
+
+        assert list(at.radio[0].options) == ["3D surface", "Heatmap"]
+        assert at.radio[0].value == "Heatmap"
+        assert len(at.exception) == 0
+
+
 class TestSidebar:
     @pytest.mark.integration
     def test_there_is_no_colour_or_theme_choice(self):
