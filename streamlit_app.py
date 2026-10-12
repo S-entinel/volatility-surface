@@ -1,6 +1,7 @@
 """Streamlit user interface for the implied volatility surface analyser."""
 
 import streamlit as st
+import numpy as np
 import pandas as pd
 from datetime import datetime
 from typing import Tuple, Dict, Any
@@ -148,6 +149,13 @@ def render_sidebar() -> Tuple[AnalysisParams, bool]:
             help="Show strikes as dollar prices, or as a multiple of the current price."
         )
         
+        surface_method = st.radio(
+            "Surface method",
+            options=["Interpolated", "SVI fit"],
+            help="Interpolated joins your quotes with straight lines. SVI fits a smooth, standard curve to each "
+                 "expiry and checks it for arbitrage."
+        )
+        
         st.divider()
         with st.expander("Advanced settings"):
             risk_free_rate = st.number_input(
@@ -194,7 +202,8 @@ def render_sidebar() -> Tuple[AnalysisParams, bool]:
         theme=CHART_THEME,
         colormap=COLOUR_SCALE,
         y_axis_type=y_axis_type,
-        show_slices=False
+        show_slices=False,
+        surface_method=surface_method
     )
     return params, refresh
 
@@ -239,17 +248,53 @@ def render_smile_tab(results: Dict[str, Any], y_axis_type: str) -> None:
     st.plotly_chart(build_smile_figure(results, chosen, y_axis_type), use_container_width=True)
 
 
+def render_svi_summary(svi: Dict[str, Any]) -> None:
+    """One line on how well SVI fitted and whether it allows arbitrage, with the per-expiry detail below it."""
+    slices = svi['slices']
+    if svi['mesh'] is None:
+        st.warning("Too few expiries could be fitted with SVI, so the interpolated surface is shown instead.")
+        return
+    
+    butterfly = [s.days for s in slices if not s.butterfly_ok]
+    calendar_pairs = svi['calendar']['violations']
+    butterfly_text = "none" if not butterfly else f"{len(butterfly)} expiries"
+    calendar_text = "none" if not calendar_pairs else f"{calendar_pairs} pairs of expiries"
+    typical_error = np.median([s.rmse for s in slices]) * 100
+    st.caption(
+        f"SVI fit: {len(slices)} of {svi['n_expiries']} expiries fitted, typical error {typical_error:.2f} vol points "
+        f"· butterfly arbitrage: {butterfly_text} · calendar arbitrage: {calendar_text}"
+    )
+    with st.expander("SVI fit details"):
+        st.dataframe(pd.DataFrame({
+            'Days': [s.days for s in slices],
+            'Points': [s.n_points for s in slices],
+            'Error (vol points)': [round(s.rmse * 100, 2) for s in slices],
+            'Butterfly': ['ok' if s.butterfly_ok else 'arbitrage' for s in slices],
+            'a': [round(s.params[0], 5) for s in slices],
+            'b': [round(s.params[1], 4) for s in slices],
+            'rho': [round(s.params[2], 3) for s in slices],
+            'm': [round(s.params[3], 4) for s in slices],
+            'sigma': [round(s.params[4], 4) for s in slices],
+        }), use_container_width=True, hide_index=True)
+
+
 @fragment
 def render_surface_tab(results: Dict[str, Any], y_axis_type: str) -> None:
     """The implied volatility surface, as a 3D chart or a 2D heatmap."""
+    svi = results.get('svi')
+    if svi is not None:
+        render_svi_summary(svi)
+    
     view_column, points_column = st.columns([1, 1])
     view = view_column.radio("View", ["3D surface", "Heatmap"], horizontal=True, key="surface_view",
                              label_visibility="collapsed")
     if view == "Heatmap":
-        show_points = points_column.toggle("Show data points", value=False, key="heatmap_points")
+        show_points = points_column.toggle("Show data points", value=False, key="show_points")
         st.plotly_chart(build_heatmap_figure(results, y_axis_type, show_points), use_container_width=True)
-        st.caption("The dotted line is the forward price. Time is drawn on a square root scale "
-                   "so short expiries are easier to see.")
+        note = "The dotted line is the forward price. Time is drawn on a square root scale so short expiries are easier to see."
+        if show_points:
+            note += " Dots are real options. Open circles are last traded prices, not live quotes."
+        st.caption(note)
     else:
         st.plotly_chart(results['fig'], use_container_width=True)
 
@@ -288,7 +333,7 @@ def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
         st.dataframe(table, use_container_width=True, hide_index=True)
         today = datetime.now().strftime('%Y%m%d')
         heatmap = st.session_state.get('surface_view') == "Heatmap"
-        chart = (build_heatmap_figure(results, y_axis_type, st.session_state.get('heatmap_points', False))
+        chart = (build_heatmap_figure(results, y_axis_type, st.session_state.get('show_points', False))
                  if heatmap else results['fig'])
         csv_column, html_column, _ = st.columns([1, 1, 2])
         csv_column.download_button(

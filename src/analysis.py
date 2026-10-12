@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from src.data.market_data import OptionDataFetcher
 from src.data.option_selection import select_otm_options
+from src.svi import calendar_check, fit_slice, surface_iv, total_variance
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
 from src.config.config import MarketDataConfig, ModelConfig, StatisticsConfig, UIConfig
@@ -34,6 +35,7 @@ class AnalysisParams:
     colormap: str
     y_axis_type: str
     show_slices: bool = True
+    surface_method: str = 'Interpolated'
 
     @property
     def risk_free_decimal(self) -> float:
@@ -230,8 +232,35 @@ def calculate_iv_statistics(valid_options: List[Dict[str, Any]], ivs: List[float
     }
 
 
+def fit_surface_svi(valid_options: List[Any], ivs: List[float], spot_price: float) -> Dict[str, Any]:
+    """Fit an SVI curve to every expiry, check for arbitrage, and evaluate the fitted surface on a grid."""
+    groups: Dict[float, List[int]] = {}
+    for index, opt in enumerate(valid_options):
+        groups.setdefault(round(float(opt['T']), 10), []).append(index)
+    
+    slices = []
+    for maturity, indices in sorted(groups.items()):
+        forward = float(valid_options[indices[0]]['forward'])
+        fitted = fit_slice(
+            k=np.log(np.array([float(valid_options[i]['strike']) for i in indices]) / forward),
+            iv=np.array([ivs[i] for i in indices]),
+            maturity=maturity, days=int(valid_options[indices[0]]['days_to_expiry']), forward=forward
+        )
+        if fitted is not None:
+            slices.append(fitted)
+    
+    fit = {'slices': slices, 'n_expiries': len(groups), 'calendar': calendar_check(slices), 'mesh': None}
+    if len(slices) >= 2:
+        strikes = np.linspace(min(float(o['strike']) for o in valid_options),
+                              max(float(o['strike']) for o in valid_options), 80)
+        times = np.array([s.maturity for s in slices])
+        maturities = np.unique(np.concatenate([np.linspace(times.min(), times.max(), 50), times]))
+        fit['mesh'] = {'strikes': strikes, 'maturities': maturities, 'iv': surface_iv(slices, strikes, maturities)}
+    return fit
+
+
 def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price: float,
-                         params: AnalysisParams) -> Tuple[go.Figure, List[int]]:
+                         params: AnalysisParams, svi: Optional[Dict[str, Any]] = None) -> Tuple[go.Figure, List[int]]:
     """Build the 3D surface with smile slices; also return the slices that could not be drawn."""
     strikes = np.array([opt['strike']/spot_price for opt in valid_options]) if params.y_axis_type == "Moneyness" \
              else np.array([opt['strike'] for opt in valid_options])
@@ -244,7 +273,14 @@ def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price:
         y_axis_type=params.y_axis_type.split()[0]
     )
     
-    plotter = SurfacePlotter(surface_data)
+    mesh = None
+    if svi is not None and svi['mesh'] is not None:
+        grid = svi['mesh']
+        divisor = spot_price if params.y_axis_type == "Moneyness" else 1.0
+        strike_mesh, expiry_mesh = np.meshgrid(grid['strikes'] / divisor, grid['maturities'])
+        mesh = (strike_mesh, expiry_mesh, np.ma.array(grid['iv'], mask=np.isnan(grid['iv'])))
+    
+    plotter = SurfacePlotter(surface_data, mesh)
     # Pass ticker to create_surface_plot
     fig = plotter.create_surface_plot(theme=params.theme.lower(), colormap=params.colormap,
                                       ticker=params.ticker)
@@ -316,6 +352,16 @@ def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: s
                 )
             ))
     
+    fit = next((sl for sl in (results.get('svi') or {}).get('slices', []) if sl.days == expiry_days), None)
+    if fit is not None:
+        k = np.linspace(fit.k_min, fit.k_max, 120)
+        strikes = fit.forward * np.exp(k)
+        fig.add_trace(go.Scatter(
+            x=strikes / spot if use_moneyness else strikes,
+            y=np.sqrt(total_variance(k, fit.params) / fit.maturity) * multiplier,
+            mode='lines', name='SVI fit', line=dict(color='white', width=2), hoverinfo='skip'
+        ))
+    
     if options and 'forward' in options[0]:
         forward = float(options[0]['forward'])
         fig.add_vline(x=forward / spot if use_moneyness else forward, line_dash='dot',
@@ -347,23 +393,32 @@ def build_heatmap_figure(results: Dict[str, Any], y_axis_type: str, show_points:
     def x_value(strike: float) -> float:
         return float(strike) / spot if use_moneyness else float(strike)
     
+    svi_mesh = (results.get('svi') or {}).get('mesh')
     point_x = np.array([x_value(opt['strike']) for opt in options])
     point_root = np.sqrt(np.array([opt['T'] for opt in options], dtype=float))
     
     # Own grid for the heatmap: rows evenly spaced in the square root of time, which gives the crowded
     # short expiries more rows, and interpolation on axes scaled to the same range
     size = 80
-    x = np.linspace(point_x.min(), point_x.max(), size)
-    roots = np.linspace(point_root.min(), point_root.max(), size)
-    x_span = (point_x.max() - point_x.min()) or 1.0
-    root_span = (point_root.max() - point_root.min()) or 1.0
-    grid_x, grid_root = np.meshgrid(x, roots)
-    z = griddata(
-        np.column_stack(((point_root - point_root.min()) / root_span, (point_x - point_x.min()) / x_span)),
-        np.array(ivs), ((grid_root - point_root.min()) / root_span, (grid_x - point_x.min()) / x_span),
-        method='linear'
-    ) * multiplier
-    maturities = roots ** 2
+    if svi_mesh is not None:
+        x = svi_mesh['strikes'] / (spot if use_moneyness else 1.0)
+        maturities = svi_mesh['maturities']
+        roots = np.sqrt(maturities)
+        z = svi_mesh['iv'] * multiplier
+    else:
+        x = np.linspace(point_x.min(), point_x.max(), size)
+        roots = np.unique(np.concatenate([np.linspace(point_root.min(), point_root.max(), size),
+                                          np.unique(point_root)]))
+        roots = roots[np.concatenate([[True], np.diff(roots) > 1e-9])]
+        x_span = (point_x.max() - point_x.min()) or 1.0
+        root_span = (point_root.max() - point_root.min()) or 1.0
+        grid_x, grid_root = np.meshgrid(x, roots)
+        z = griddata(
+            np.column_stack(((point_root - point_root.min()) / root_span, (point_x - point_x.min()) / x_span)),
+            np.array(ivs), ((grid_root - point_root.min()) / root_span, (grid_x - point_x.min()) / x_span),
+            method='linear'
+        ) * multiplier
+        maturities = roots ** 2
     
     # Time is drawn on a square root scale so the crowded short expiries get room; ticks are in years
     tick_years = [t for t in (0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3) if maturities[0] <= t <= maturities[-1]]
@@ -462,12 +517,13 @@ def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Option
     if len(ivs) < MarketDataConfig.MIN_VALID_OPTIONS:
         raise AnalysisError(f"Insufficient valid options for analysis. Found only {len(ivs)} valid IVs.")
     
-    fig, skipped_slice_days = build_surface_figure(valid_options, ivs, spot_price, params)
+    svi = fit_surface_svi(valid_options, ivs, spot_price) if params.surface_method == "SVI fit" else None
+    fig, skipped_slice_days = build_surface_figure(valid_options, ivs, spot_price, params, svi)
     
     # Calculate IV statistics
     iv_stats = calculate_iv_statistics(valid_options, ivs, spot_price)
     
-    return {
+    results = {
         'fig': fig,
         'spot_price': spot_price,
         'ticker': params.ticker,
@@ -480,6 +536,9 @@ def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Option
         'n_puts': sum(1 for opt in valid_options if opt['type'] == 'put'),
         'n_calls': sum(1 for opt in valid_options if opt['type'] == 'call')
     }
+    if svi is not None:
+        results['svi'] = svi
+    return results
 
 
 def run_analysis(params: AnalysisParams, on_status: Optional[StatusCallback] = None,

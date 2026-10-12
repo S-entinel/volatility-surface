@@ -208,11 +208,40 @@ class TestSmileTab:
 class TestHeatmapView:
     @pytest.mark.integration
     def test_the_surface_can_be_switched_to_a_heatmap(self):
-        at, _ = open_app(make_chain(), [lambda a: a.radio[0].set_value("Heatmap").run()])
+        at, _ = open_app(make_chain(), [lambda a: widget(a.radio, "View").set_value("Heatmap").run()])
 
-        assert list(at.radio[0].options) == ["3D surface", "Heatmap"]
-        assert at.radio[0].value == "Heatmap"
+        assert list(widget(at.radio, "View").options) == ["3D surface", "Heatmap"]
+        assert widget(at.radio, "View").value == "Heatmap"
         assert len(at.exception) == 0
+
+
+class TestDataPoints:
+    @pytest.mark.integration
+    def test_data_points_can_be_shown_on_the_heatmap(self):
+        at, _ = open_app(make_chain(), [lambda a: widget(a.radio, "View").set_value("Heatmap").run(),
+                                        lambda a: a.toggle[0].set_value(True).run()])
+
+        assert at.toggle[0].value is True
+        assert len(at.exception) == 0
+        assert any("Dots are real options" in c.value for c in at.caption)
+
+
+class TestSviSurface:
+    @pytest.mark.integration
+    def test_svi_fit_can_be_chosen(self):
+        at, _ = open_app(make_chain(), [lambda a: widget(a.radio, "Surface method").set_value("SVI fit").run()])
+        svi = at.session_state['analysis_results']['svi']
+
+        assert len(at.exception) == 0
+        assert len(svi['slices']) >= 2 and svi['mesh'] is not None
+        assert any(c.value.startswith("SVI fit:") for c in at.caption)
+
+    @pytest.mark.integration
+    def test_svi_is_off_by_default(self):
+        at, _ = open_app(make_chain())
+
+        assert widget(at.radio, "Surface method").value == "Interpolated"
+        assert 'svi' not in at.session_state['analysis_results']
 
 
 class TestSidebar:

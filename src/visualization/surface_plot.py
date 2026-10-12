@@ -8,7 +8,7 @@ for all classes and methods.
 import numpy as np
 from scipy.interpolate import griddata
 import plotly.graph_objects as go
-from typing import List, Literal, Dict, Any, Optional
+from typing import List, Literal, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import copy
 from src.config.config import VisualizationConfig, StatisticsConfig
@@ -79,12 +79,15 @@ class SurfacePlotter:
         ]
     }
 
-    def __init__(self, surface_data: SurfaceData):
+    def __init__(self, surface_data: SurfaceData, mesh: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None):
         self.data = surface_data
         # Filled in by add_smile_slices: which requested slices were drawn / skipped (in days)
         self.drawn_slice_days: List[int] = []
         self.skipped_slice_days: List[int] = []
-        self._prepare_mesh()
+        if mesh is None:
+            self._prepare_mesh()
+        else:
+            self.strike_mesh, self.expiry_mesh, self.vol_mesh = mesh
 
     def _prepare_mesh(self) -> None:
         """
@@ -105,9 +108,18 @@ class SurfacePlotter:
         
         grid_size = VisualizationConfig.MESH_GRID_SIZE
         
+        # One grid row for every real expiry, plus evenly spaced rows to keep the surface smooth between
+        # them. Without a row at each expiry, the strikes that only longer expiries have fall between
+        # two rows and are left off the drawn surface.
+        expiry_rows = np.unique(np.concatenate([
+            np.linspace(self.data.expiries.min(), self.data.expiries.max(), grid_size),
+            np.unique(self.data.expiries)
+        ]))
+        expiry_rows = expiry_rows[np.concatenate([[True], np.diff(expiry_rows) > 1e-9])]
+        
         self.strike_mesh, self.expiry_mesh = np.meshgrid(
             np.linspace(self.data.strikes.min(), self.data.strikes.max(), grid_size),
-            np.linspace(self.data.expiries.min(), self.data.expiries.max(), grid_size)
+            expiry_rows
         )
         
         points = np.column_stack((self.data.expiries, self.data.strikes))
