@@ -336,6 +336,13 @@ def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: s
     return fig
 
 
+def figure_html(fig: go.Figure) -> str:
+    """A standalone page with the interactive chart. It fills the browser window; plotly.js loads from a CDN."""
+    page = go.Figure(fig).update_layout(width=None, height=None, autosize=True)
+    html = page.to_html(include_plotlyjs="cdn", default_width="100%", default_height="100vh")
+    return html.replace("<body>", '<body style="margin: 0; background: #000000;">', 1)
+
+
 def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Optional[StatusCallback] = None,
                   on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
     """Filter a fetched chain, select out-of-the-money options, solve the IVs and build the figure."""

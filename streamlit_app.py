@@ -5,7 +5,8 @@ import pandas as pd
 from datetime import datetime
 from typing import Tuple, Dict, Any
 from src.analysis import (
-    AnalysisError, AnalysisParams, analyse_chain, build_smile_figure, expiry_labels, fetch_full_chain, smile_stats
+    AnalysisError, AnalysisParams, analyse_chain, build_smile_figure, expiry_labels, fetch_full_chain,
+    figure_html, smile_stats
 )
 from src.config.config import (
     UIConfig, 
@@ -270,11 +271,22 @@ def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
     with data_tab:
         table = results_table(results)
         st.dataframe(table, use_container_width=True, hide_index=True)
-        st.download_button(
+        today = datetime.now().strftime('%Y%m%d')
+        csv_column, html_column, _ = st.columns([1, 1, 2])
+        csv_column.download_button(
             "Export data (CSV)",
             data=table.to_csv(index=False).encode('utf-8'),
-            file_name=f"{results['ticker']}_iv_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime='text/csv'
+            file_name=f"{results['ticker']}_iv_analysis_{today}.csv",
+            mime='text/csv',
+            use_container_width=True
+        )
+        html_column.download_button(
+            "Export surface (HTML)",
+            data=figure_html(results['fig']).encode('utf-8'),
+            file_name=f"{results['ticker']}_iv_surface_{today}.html",
+            mime='text/html',
+            help="An interactive copy of the surface that opens in any browser. It needs an internet connection to load.",
+            use_container_width=True
         )
 
 
