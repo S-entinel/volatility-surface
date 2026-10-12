@@ -623,3 +623,101 @@ class TestPutFetching:
 
         assert {r['expiration'] for r in rows} == {good_date}
         assert sorted(r['type'] for r in rows) == ['call', 'put']
+
+
+class TestLastPriceFallback:
+    """With no live quote, the last traded price is used (so a closed market still gives a chain)."""
+
+    @staticmethod
+    def chain(**columns) -> pd.DataFrame:
+        base = dict(strike=[100.0], bid=[0.0], ask=[0.0], lastPrice=[4.0], openInterest=[100])
+        return pd.DataFrame({**base, **columns})
+
+    @pytest.mark.unit
+    def test_no_quote_uses_last_price(self):
+        kept = filter_quotes(self.chain(), min_open_interest=10)
+
+        assert len(kept) == 1
+        assert kept['price'].iloc[0] == 4.0
+        assert kept['price_source'].iloc[0] == 'last'
+
+    @pytest.mark.unit
+    def test_live_quote_uses_mid_not_last_price(self):
+        kept = filter_quotes(self.chain(bid=[5.0], ask=[5.2], lastPrice=[3.0]), 10)
+
+        assert kept['price'].iloc[0] == pytest.approx(5.1)
+        assert kept['price_source'].iloc[0] == 'mid'
+
+    @pytest.mark.unit
+    def test_crossed_quote_falls_back_to_last_price(self):
+        kept = filter_quotes(self.chain(bid=[5.5], ask=[5.0]), 10)
+
+        assert kept['price'].iloc[0] == 4.0
+        assert kept['price_source'].iloc[0] == 'last'
+
+    @pytest.mark.unit
+    def test_wide_live_spread_is_dropped_not_replaced_by_last_price(self):
+        """A quoted contract with a spread over the cap is rejected; the last price is not a rescue."""
+        assert filter_quotes(self.chain(bid=[1.0], ask=[3.0], lastPrice=[2.0]), 10).empty
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize('last', [0.0, 0.01, float('nan'), -1.0])
+    def test_unusable_last_price_dropped(self, last):
+        assert filter_quotes(self.chain(lastPrice=[last]), 10).empty
+
+    @pytest.mark.unit
+    def test_missing_last_price_column_drops_unquoted_contracts(self):
+        chain = pd.DataFrame(dict(strike=[100.0], bid=[0.0], ask=[0.0], openInterest=[100]))
+        assert filter_quotes(chain, 10).empty
+
+    @pytest.mark.unit
+    def test_open_interest_still_applies_to_last_price_contracts(self):
+        chain = self.chain(openInterest=[5])
+        assert filter_quotes(chain, 10).empty
+        assert len(filter_quotes(chain, 5)) == 1
+
+    @pytest.mark.unit
+    def test_mixed_chain_keeps_the_right_prices(self):
+        chain = pd.DataFrame(dict(
+            strike=[90.0, 95.0, 100.0, 105.0],
+            bid=[5.0, 0.0, 0.0, 2.0],
+            ask=[5.2, 0.0, 0.0, 2.2],
+            lastPrice=[1.0, 3.0, float('nan'), 9.0],
+            openInterest=[50, 50, 50, 50]))
+        kept = filter_quotes(chain, 10).set_index('strike')
+
+        assert list(kept.index) == [90.0, 95.0, 105.0]
+        assert kept.loc[90.0, 'price_source'] == 'mid' and kept.loc[90.0, 'price'] == pytest.approx(5.1)
+        assert kept.loc[95.0, 'price_source'] == 'last' and kept.loc[95.0, 'price'] == 3.0
+        assert kept.loc[105.0, 'price_source'] == 'mid' and kept.loc[105.0, 'price'] == pytest.approx(2.1)
+
+    @pytest.mark.unit
+    def test_does_not_modify_the_input_chain(self):
+        chain = self.chain()
+        before = chain.copy()
+        filter_quotes(chain, 10)
+
+        pd.testing.assert_frame_equal(chain, before)
+
+    @pytest.mark.integration
+    def test_closed_market_chain_still_produces_options(self):
+        """Every bid and ask is zero (market closed) but last prices exist."""
+        today = pd.Timestamp.now().normalize()
+        expiry = today + timedelta(days=30)
+        side = pd.DataFrame(dict(
+            strike=[90.0, 95.0, 105.0, 110.0], bid=[0.0] * 4, ask=[0.0] * 4,
+            lastPrice=[1.2, 2.5, 3.1, 1.4], volume=[0] * 4, openInterest=[200] * 4))
+        chain = Mock()
+        chain.calls = side
+        chain.puts = side.copy()
+
+        with patch('src.data.market_data.yf.Ticker') as mock_ticker:
+            mock_ticker.return_value.history.return_value = pd.DataFrame({'Close': [100.0]})
+            mock_ticker.return_value.options = [expiry.strftime('%Y-%m-%d')]
+            mock_ticker.return_value.option_chain.return_value = chain
+            mock_ticker.return_value.info = {}
+            result = OptionDataFetcher('SPY').prepare_for_iv()
+
+        assert len(result) == 8, "4 calls + 4 puts"
+        assert set(result['price_source']) == {'last'}
+        assert sorted(result['price'].unique()) == [1.2, 1.4, 2.5, 3.1]

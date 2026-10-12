@@ -70,42 +70,30 @@ def resolve_dividend_yield(info: Mapping[str, Any], spot_price: Optional[float] 
 
 
 def filter_quotes(chain: pd.DataFrame, min_open_interest: int) -> pd.DataFrame:
-    """
-    Keep only contracts with a usable two-sided quote and enough open interest.
-
-    A contract is kept when all of these hold:
-
-    - bid > 0 and ask >= bid (a live, uncrossed quote)
-    - mid price >= ``MarketDataConfig.MIN_QUOTE_MID_PRICE``
-    - (ask - bid) / mid <= ``MarketDataConfig.MAX_RELATIVE_SPREAD``
-    - open interest >= ``min_open_interest`` (missing open interest counts as 0)
-
-    Open interest is used instead of daily volume because volume resets every session,
-    which would empty the chain before the market opens.
-
-    Args:
-        chain: One side (calls or puts) of a Yahoo option chain
-        min_open_interest: Minimum open interest
-
-    Returns:
-        The rows that pass every filter
-    """
+    """Filter a chain to usable contracts and add ``price`` and ``price_source`` columns."""
     bid = chain['bid']
     ask = chain['ask']
+    last = chain['lastPrice'] if 'lastPrice' in chain else pd.Series(float('nan'), index=chain.index)
     mid = (bid + ask) / 2
+    quoted = (bid > 0) & (ask >= bid)
+
+    # Midpoint when there is a live, uncrossed quote, otherwise the last traded price
+    price = mid.where(quoted, last)
     if 'openInterest' in chain:
         open_interest = chain['openInterest'].fillna(0)
     else:
         open_interest = pd.Series(0, index=chain.index)
 
     keep = (
-        (bid > 0)
-        & (ask >= bid)
-        & (mid >= MarketDataConfig.MIN_QUOTE_MID_PRICE)
-        & ((ask - bid) / mid <= MarketDataConfig.MAX_RELATIVE_SPREAD)
+        (price >= MarketDataConfig.MIN_QUOTE_MID_PRICE)
+        & (~quoted | ((ask - bid) / mid <= MarketDataConfig.MAX_RELATIVE_SPREAD))
         & (open_interest >= min_open_interest)
     )
-    return chain[keep]
+
+    kept = chain[keep].copy()
+    kept['price'] = price[keep]
+    kept['price_source'] = quoted[keep].map({True: 'mid', False: 'last'})
+    return kept
 
 
 class OptionDataFetcher:
@@ -304,7 +292,8 @@ class OptionDataFetcher:
                             expiry_rows.append({
                                 'expiration': exp_date,
                                 'strike': strike,
-                                'price': (row['bid'] + row['ask']) / 2,  # midpoint
+                                'price': row['price'],
+                                'price_source': row['price_source'],
                                 'type': option_type,
                                 'volume': row['volume'] if 'volume' in row else 0,
                                 'open_interest': row['openInterest'] if 'openInterest' in row else 0,
