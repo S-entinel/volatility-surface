@@ -32,6 +32,7 @@ class AnalysisParams:
     theme: str
     colormap: str
     y_axis_type: str
+    show_slices: bool = True
 
     @property
     def risk_free_decimal(self) -> float:
@@ -246,7 +247,8 @@ def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price:
     # Pass ticker to create_surface_plot
     fig = plotter.create_surface_plot(theme=params.theme.lower(), colormap=params.colormap,
                                       ticker=params.ticker)
-    fig = plotter.add_smile_slices(fig, theme=params.theme.lower())
+    if params.show_slices:
+        fig = plotter.add_smile_slices(fig, theme=params.theme.lower())
     return fig, list(plotter.skipped_slice_days)
 
 

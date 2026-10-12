@@ -57,7 +57,7 @@ class TestModelConfig:
     def test_rate_defaults(self):
         """Test default rates."""
         assert ModelConfig.DEFAULT_RISK_FREE_RATE == 0.015
-        assert ModelConfig.DEFAULT_DIVIDEND_YIELD == 0.013
+        assert ModelConfig.DEFAULT_DIVIDEND_YIELD == 0.01
         assert isinstance(ModelConfig.DEFAULT_RISK_FREE_RATE, float)
         assert isinstance(ModelConfig.DEFAULT_DIVIDEND_YIELD, float)
     
@@ -226,7 +226,7 @@ class TestUIConfig:
     @pytest.mark.unit
     def test_cache_settings(self):
         """Test cache configuration."""
-        assert UIConfig.CACHE_TTL_SECONDS == 900
+        assert UIConfig.CACHE_TTL_SECONDS == 300
         assert isinstance(UIConfig.CACHE_TTL_SECONDS, int)
         assert UIConfig.CACHE_TTL_SECONDS > 0
 

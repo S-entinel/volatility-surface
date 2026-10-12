@@ -68,8 +68,20 @@ def open_app(chain, steps=()):
     return at, fetch
 
 
+def widget(elements, label):
+    return next(e for e in elements if e.label == label)
+
+
 def number_input(at, label):
-    return next(n for n in at.number_input if n.label == label)
+    return widget(at.number_input, label)
+
+
+def strike_range(at, low, high):
+    widget(at.slider, "Strike range (% of spot)").set_range(low, high).run()
+
+
+def y_axis(at, option):
+    widget(at.selectbox, "Strike axis").set_value(option).run()
 
 
 def point_count(at) -> int:
@@ -114,18 +126,16 @@ class TestNormalRun:
         assert skew == pytest.approx(0.0, abs=0.01)
 
     @pytest.mark.integration
-    def test_captions_describe_the_option_mix_and_dividend(self):
-        at, _ = open_app(make_chain())
-        captions = [c.value for c in at.caption]
+    def test_header_line_describes_the_surface(self):
+        chain = make_chain()
+        at, _ = open_app(chain)
+        results = at.session_state['analysis_results']
+        expiries = len({o['days_to_expiry'] for o in results['valid_options']})
+        header = next(m.value for m in at.markdown if "IV points" in m.value)
 
-        assert any(c.startswith("Built from out-of-the-money options only") for c in captions)
-        assert any(c.startswith("Dividend yield used") and "looked up" in c for c in captions)
-
-    @pytest.mark.integration
-    def test_caption_says_when_the_data_was_fetched(self):
-        at, _ = open_app(make_chain())
-
-        assert any(c.value.startswith("Data fetched at") for c in at.caption)
+        assert header.startswith("**SPY** · spot $100.00")
+        assert f"{len(results['ivs']):,} IV points ({results['n_puts']:,} puts / {results['n_calls']:,} calls)" in header
+        assert f"across {expiries} expiries" in header
 
     @pytest.mark.integration
     def test_dividend_override_is_used_and_reported(self):
@@ -134,24 +144,81 @@ class TestNormalRun:
 
         assert len(at.exception) == 0
         assert results['dividend_source'] == "manual override"
-        assert results['dividend_yield_used'] == pytest.approx(0.013)  # the sidebar default, 1.3%
-        assert any("manual override" in c.value for c in at.caption)
+        assert results['dividend_yield_used'] == pytest.approx(0.01)  # the sidebar default, 1%
 
     @pytest.mark.integration
-    def test_unavailable_smile_slices_are_reported(self):
-        """Data starting at 45 days cannot show the default 30-day slice."""
-        at, _ = open_app(make_chain(days=(45, 75, 100, 180)))
+    def test_the_chart_is_a_single_surface_with_no_smile_slice_lines(self):
+        at, _ = open_app(make_chain())
+        fig = at.session_state['analysis_results']['fig']
 
-        assert any("30d" in c.value and "not drawn" in c.value for c in at.caption)
+        assert [trace.type for trace in fig.data] == ['surface']
+        assert not any("not drawn" in c.value for c in at.caption)
+
+
+class TestLayout:
+    @pytest.mark.integration
+    def test_four_key_figures(self):
+        at, _ = open_app(make_chain())
+
+        assert [m.label for m in at.metric] == ["ATM IV", "IV Skew", "Term Structure", "IV Range"]
+        assert at.metric[0].value == "20.0%"
+
+    @pytest.mark.integration
+    def test_tabs(self):
+        at, _ = open_app(make_chain())
+
+        assert [t.label for t in at.tabs] == ["Surface", "Data & Export"]
+
+    @pytest.mark.integration
+    def test_table_has_one_row_per_point(self):
+        at, _ = open_app(make_chain())
+        table = at.dataframe[0].value
+        results = at.session_state['analysis_results']
+
+        assert list(table.columns) == ['Strike', 'Days_to_Expiry', 'Option_Type', 'Price', 'Price_Source',
+                                       'Open_Interest', 'IV', 'Moneyness']
+        assert len(table) == len(results['ivs'])
+        assert table['IV'].between(19.99, 20.01).all()
+        assert set(table['Option_Type']) == {'call', 'put'}
+
+    @pytest.mark.integration
+    def test_surface_always_uses_the_viridis_colour_scale(self):
+        at, _ = open_app(make_chain())
+        surface = at.session_state['analysis_results']['fig'].data[0]
+
+        assert surface.type == 'surface'
+        assert surface.colorscale[0][1] == '#440154'  # the dark purple at the bottom of Viridis
 
 
 class TestSidebar:
+    @pytest.mark.integration
+    def test_there_is_no_colour_or_theme_choice(self):
+        at, _ = open_app(make_chain())
+
+        assert [s.label for s in at.selectbox] == ["Strike axis"]
+
+    @pytest.mark.integration
+    def test_strike_range_is_one_slider_with_the_default_window(self):
+        at, _ = open_app(make_chain())
+        slider = widget(at.slider, "Strike range (% of spot)")
+
+        assert slider.value == (75, 125)
+        assert (slider.min, slider.max) == (UIConfig.MIN_STRIKE_PCT_LOWER, UIConfig.MAX_STRIKE_PCT_UPPER)
+
+    @pytest.mark.integration
+    def test_rate_and_dividend_controls_are_under_advanced(self):
+        at, _ = open_app(make_chain())
+
+        assert [e.label for e in at.expander] == ["Advanced settings"]
+        assert widget(at.expander[0].number_input, "Risk-free rate (% per year)").value == pytest.approx(1.5)
+        assert widget(at.expander[0].number_input, "Dividend yield (% per year)").value == pytest.approx(1.0)
+
     @pytest.mark.integration
     def test_open_interest_defaults_to_zero(self):
         """Yahoo often reports no open interest before the US open, so the default must not filter."""
         at, _ = open_app(make_chain())
 
-        assert number_input(at, "Min Open Interest").value == 0
+        assert number_input(at, "Minimum open interest (contracts)").value == 0
 
     @pytest.mark.integration
     def test_fetches_the_widest_window_with_no_open_interest_limit(self):
@@ -165,9 +232,9 @@ class TestSidebar:
     @pytest.mark.integration
     def test_changing_settings_does_not_refetch(self):
         at, fetch = open_app(make_chain(), [
-            lambda a: a.selectbox[0].set_value(UIConfig.AVAILABLE_THEMES[-1]).run(),
-            lambda a: a.selectbox[2].set_value(UIConfig.AVAILABLE_Y_AXIS_TYPES[-1]).run(),
-            lambda a: number_input(a, "Risk-Free Rate (%)").set_value(3.0).run(),
+            lambda a: y_axis(a, UIConfig.AVAILABLE_Y_AXIS_TYPES[-1]),
+            lambda a: number_input(a, "Risk-free rate (% per year)").set_value(3.0).run(),
+            lambda a: strike_range(a, 90, 110),
         ])
 
         assert fetch.call_count == 1
@@ -179,7 +246,7 @@ class TestSidebar:
         at, fetch = open_app(chain)
         before = point_count(at)
 
-        number_input(at, "Min Open Interest").set_value(50).run()
+        number_input(at, "Minimum open interest (contracts)").set_value(50).run()
 
         assert before == expected_otm_count(chain)
         assert point_count(at) == expected_otm_count(chain[chain['open_interest'] >= 50])
@@ -191,7 +258,7 @@ class TestSidebar:
         chain = make_chain()
         at, fetch = open_app(chain)
 
-        number_input(at, "Min Strike %").set_value(95.0).run()
+        strike_range(at, 95, 125)
 
         assert point_count(at) == expected_otm_count(chain[chain['strike'] >= 95.0])
         assert fetch.call_count == 1
@@ -254,8 +321,8 @@ class TestDataProblems:
     @pytest.mark.integration
     def test_a_failed_fetch_is_not_repeated_when_a_setting_changes(self):
         at, fetch = open_app(ValueError("Yahoo is down"), [
-            lambda a: a.selectbox[0].set_value(UIConfig.AVAILABLE_THEMES[-1]).run(),
-            lambda a: number_input(a, "Min Open Interest").set_value(5).run(),
+            lambda a: y_axis(a, UIConfig.AVAILABLE_Y_AXIS_TYPES[-1]),
+            lambda a: number_input(a, "Minimum open interest (contracts)").set_value(5).run(),
         ])
 
         assert fetch.call_count == 1

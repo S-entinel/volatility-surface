@@ -39,8 +39,8 @@ class ModelConfig:
     # Default risk-free rate (as decimal, e.g., 0.015 = 1.5%)
     DEFAULT_RISK_FREE_RATE: float = 0.015
     
-    # Default dividend yield (as decimal, e.g., 0.013 = 1.3%)
-    DEFAULT_DIVIDEND_YIELD: float = 0.013
+    # Default dividend yield (as decimal, e.g., 0.01 = 1%)
+    DEFAULT_DIVIDEND_YIELD: float = 0.01
     
     # Parameter bounds for validation
     MIN_RISK_FREE_RATE: float = 0.0
@@ -138,7 +138,7 @@ class UIConfig:
     AVAILABLE_Y_AXIS_TYPES: List[str] = ["Strike Price ($)", "Moneyness"]
     
     # Cache settings
-    CACHE_TTL_SECONDS: int = 900  # 15 minutes
+    CACHE_TTL_SECONDS: int = 300  # 5 minutes
 
 
 class LoggingConfig:

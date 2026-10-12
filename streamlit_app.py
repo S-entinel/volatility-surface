@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any
 from src.analysis import AnalysisError, AnalysisParams, analyse_chain, fetch_full_chain
 from src.config.config import (
     UIConfig, 
@@ -12,37 +12,60 @@ from src.config.config import (
 )
 
 
+# The chart is always dark with the Viridis colour scale
+CHART_THEME = UIConfig.AVAILABLE_THEMES[0]
+COLOUR_SCALE = 'Viridis'
+
+STRIKE_AXIS_NAMES = {'Strike Price ($)': 'Strike price ($)', 'Moneyness': 'Moneyness (strike / spot)'}
+
+
 def apply_custom_style() -> None:
-    """
-    Apply custom CSS styling to the Streamlit app.
-    
-    Returns:
-        None
-    """
+    """Apply the black and white styling; the surface chart is the only colour on the page."""
     st.markdown("""
         <style>
-        .main > div {
+        .block-container {
             padding-top: 2rem;
         }
         .stApp {
             font-family: "IBM Plex Mono", monospace;
         }
-        .stAlert {
-            background-color: rgba(28, 131, 225, 0.1);
+        div[data-testid="stMetric"], div[data-testid="metric-container"] {
+            background-color: #111111;
+            border: 1px solid #333333;
             padding: 1rem;
-            border-radius: 4px;
+            border-radius: 2px;
         }
-        div[data-testid="metric-container"] {
-            background-color: rgba(28, 131, 225, 0.1);
-            border: 1px solid rgba(28, 131, 225, 0.1);
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 0.5rem 0;
+        .stAlert {
+            background-color: #111111;
+            border: 1px solid #333333;
+            border-radius: 2px;
         }
         .stButton > button {
             width: 100%;
             font-family: "IBM Plex Mono", monospace;
             font-weight: 500;
+            border-radius: 2px;
+        }
+        button[data-baseweb="tab"] {
+            font-family: "IBM Plex Mono", monospace;
+        }
+        div[data-baseweb="tab-highlight"] {
+            background-color: #FFFFFF;
+        }
+        section[data-testid="stSidebar"] h3 {
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #9A9A9A;
+            padding-bottom: 0.25rem;
+        }
+        section[data-testid="stSidebar"] hr {
+            border-color: #262626;
+            margin: 1.1rem 0;
+        }
+        section[data-testid="stSidebar"] label p {
+            font-size: 0.85rem;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -83,174 +106,146 @@ def cached_chain(ticker: str) -> Tuple[pd.DataFrame, datetime]:
 def render_sidebar() -> Tuple[AnalysisParams, bool]:
     """Draw the sidebar; return the chosen parameters and whether Refresh data was clicked."""
     with st.sidebar:
-        with st.expander("Market Data Configuration", expanded=True):
-            ticker = st.text_input(
-                "Ticker Symbol",
-                value=UIConfig.DEFAULT_TICKER
-            ).upper()
-            
-            st.markdown("#### Strike Price Range")
-            col1, col2 = st.columns(2)
-            with col1:
-                min_strike_pct = st.number_input(
-                    "Min Strike %",
-                    min_value=UIConfig.MIN_STRIKE_PCT_LOWER,
-                    max_value=UIConfig.MIN_STRIKE_PCT_UPPER,
-                    value=MarketDataConfig.DEFAULT_MIN_STRIKE_PCT,
-                    format="%.1f"
-                )
-            with col2:
-                max_strike_pct = st.number_input(
-                    "Max Strike %",
-                    min_value=min_strike_pct + 1,
-                    max_value=UIConfig.MAX_STRIKE_PCT_UPPER,
-                    value=MarketDataConfig.DEFAULT_MAX_STRIKE_PCT,
-                    format="%.1f"
-                )
-                
-            min_open_interest = st.number_input(
-                "Min Open Interest",
-                min_value=MarketDataConfig.MIN_OPEN_INTEREST_THRESHOLD,
-                value=MarketDataConfig.DEFAULT_MIN_OPEN_INTEREST,
-                help="Contracts with fewer open positions than this are ignored. "
-                     "Yahoo often reports no open interest before the US market opens, so 0 keeps everything."
-            )
+        st.subheader("Market")
+        ticker = st.text_input(
+            "Ticker",
+            value=UIConfig.DEFAULT_TICKER,
+            placeholder="e.g. SPY",
+            help="A US-listed stock or ETF that has options, such as SPY, QQQ or AAPL."
+        ).strip().upper()
+        refresh = st.button(
+            "Refresh data",
+            use_container_width=True,
+            help="Fetch fresh prices instead of reusing the data from the last few minutes."
+        )
         
-        with st.expander("Model Parameters", expanded=True):
+        st.divider()
+        st.subheader("Filters")
+        strike_low, strike_high = st.slider(
+            "Strike range (% of spot)",
+            min_value=int(UIConfig.MIN_STRIKE_PCT_LOWER),
+            max_value=int(UIConfig.MAX_STRIKE_PCT_UPPER),
+            value=(int(MarketDataConfig.DEFAULT_MIN_STRIKE_PCT), int(MarketDataConfig.DEFAULT_MAX_STRIKE_PCT)),
+            help="Only contracts with strikes inside this window are used. 100% is the current price."
+        )
+        min_open_interest = st.number_input(
+            "Minimum open interest (contracts)",
+            min_value=MarketDataConfig.MIN_OPEN_INTEREST_THRESHOLD,
+            value=MarketDataConfig.DEFAULT_MIN_OPEN_INTEREST,
+            help="Contracts with fewer open positions than this are ignored. "
+                 "Yahoo often reports no open interest before the US market opens, so 0 keeps everything."
+        )
+        
+        st.divider()
+        st.subheader("Chart")
+        y_axis_type = st.selectbox(
+            "Strike axis",
+            options=UIConfig.AVAILABLE_Y_AXIS_TYPES,
+            format_func=lambda option: STRIKE_AXIS_NAMES.get(option, option),
+            help="Show strikes as dollar prices, or as a multiple of the current price."
+        )
+        
+        st.divider()
+        with st.expander("Advanced settings"):
             risk_free_rate = st.number_input(
-                "Risk-Free Rate (%)",
+                "Risk-free rate (% per year)",
                 min_value=UIConfig.RISK_FREE_RATE_MIN,
                 max_value=UIConfig.RISK_FREE_RATE_MAX,
                 value=ModelConfig.DEFAULT_RISK_FREE_RATE * 100,  # Convert to percentage
                 step=UIConfig.RISK_FREE_RATE_STEP,
                 format="%.1f",
-                help="Annual risk-free rate (e.g., 4.5 for 4.5%)"
+                help="Used to discount option prices and to place the forward price (e.g. 4.5 for 4.5%)."
             )
-
+            
             override_dividend = st.checkbox(
                 "Override dividend yield",
                 value=False,
                 help="By default the dividend yield is looked up for the ticker. "
                      "Tick this box to enter your own value instead."
             )
-
+            
             dividend_yield = st.number_input(
-                "Dividend Yield (%)",
+                "Dividend yield (% per year)",
                 min_value=UIConfig.DIVIDEND_YIELD_MIN,
                 max_value=UIConfig.DIVIDEND_YIELD_MAX,
                 value=ModelConfig.DEFAULT_DIVIDEND_YIELD * 100,  # Convert to percentage
                 step=UIConfig.DIVIDEND_YIELD_STEP,
                 format="%.1f",
                 disabled=not override_dividend,
-                help="Annual dividend yield (e.g., 1.3 for 1.3%). Only used when the override box is ticked."
+                help="Only used when the override box above is ticked (e.g. 1.0 for 1%)."
             )
         
-        with st.expander("Visualisation Settings", expanded=True):
-            theme = st.selectbox(
-                "Theme",
-                options=UIConfig.AVAILABLE_THEMES
-            )
-            
-            colormap = st.selectbox(
-                "Colour Scheme",
-                options=UIConfig.AVAILABLE_COLORMAPS
-            )
-            
-            y_axis_type = st.selectbox(
-                "Y-Axis Scale",
-                options=UIConfig.AVAILABLE_Y_AXIS_TYPES
-            )
-        
-        refresh = st.button(
-            "Refresh data",
-            use_container_width=True,
-            help="Fetch fresh prices instead of reusing the data from the last few minutes."
+        st.caption(
+            "Out-of-the-money options only. Prices are bid-ask midpoints, "
+            "or the last traded price when there is no live quote."
         )
-
+    
     params = AnalysisParams(
         ticker=ticker,
-        min_strike_pct=min_strike_pct,
-        max_strike_pct=max_strike_pct,
+        min_strike_pct=float(strike_low),
+        max_strike_pct=float(strike_high),
         min_open_interest=min_open_interest,
         risk_free_rate=risk_free_rate,
         override_dividend=override_dividend,
         dividend_yield=dividend_yield,
-        theme=theme,
-        colormap=colormap,
-        y_axis_type=y_axis_type
+        theme=CHART_THEME,
+        colormap=COLOUR_SCALE,
+        y_axis_type=y_axis_type,
+        show_slices=False
     )
     return params, refresh
 
 
-def render_results(results: Dict[str, Any], fetched_at: Optional[datetime] = None) -> None:
-    """Draw the chart, metrics, captions and the CSV export button."""
-    # Main visualisation
-    st.plotly_chart(results['fig'], use_container_width=True)
+def results_table(results: Dict[str, Any]) -> pd.DataFrame:
+    """One row per implied volatility point, as shown in the Data & Export tab and the CSV."""
+    options = results['valid_options']
+    return pd.DataFrame({
+        'Strike': [opt['strike'] for opt in options],
+        'Days_to_Expiry': [opt['days_to_expiry'] for opt in options],
+        'Option_Type': [opt['type'] for opt in options],
+        'Price': [round(float(opt['price']), 4) for opt in options],
+        'Price_Source': [opt.get('price_source') for opt in options],
+        'Open_Interest': [opt.get('open_interest') for opt in options],
+        'IV': [round(iv * 100, 4) for iv in results['ivs']],
+        'Moneyness': [round(opt['strike'] / results['spot_price'], 4) for opt in options]
+    })
 
-    if results.get('skipped_slice_days'):
-        skipped_text = ", ".join(f"{days}d" for days in results['skipped_slice_days'])
-        st.caption(
-            f"Smile slice(s) not drawn because they fall outside the available expiries: {skipped_text}."
-        )
+
+def render_results(results: Dict[str, Any]) -> None:
+    """Draw the header, the key figures, and the Surface and Data & Export tabs."""
+    expiries = len({opt['days_to_expiry'] for opt in results['valid_options']})
+    stats = results['iv_stats']
     
-    # Metrics in clean table format below visualisation
-    st.markdown("---")
-    
+    st.markdown(
+        f"**{results['ticker']}** · spot ${results['spot_price']:,.2f} · {len(results['ivs']):,} IV points "
+        f"({results['n_puts']:,} puts / {results['n_calls']:,} calls) across {expiries} expiries"
+    )
     col1, col2, col3, col4 = st.columns(4)
+    col1.metric("ATM IV", f"{stats['atm_iv']:.1f}%",
+                help="Implied volatility at the strike closest to the current price.")
+    col2.metric("IV Skew", f"{stats['iv_skew']:.1f}%" if stats['iv_skew'] is not None else "N/A",
+                help="Out-of-the-money put volatility minus out-of-the-money call volatility, "
+                     "at the nearest expiry. Positive means downside protection costs more.")
+    col3.metric("Term Structure", f"{stats['term_structure']:.1f}%",
+                help="At-the-money volatility of the longest expiry minus the shortest. "
+                     "Negative means near-term volatility is higher.")
+    col4.metric("IV Range", f"{stats['iv_min']:.1f}% - {stats['iv_max']:.1f}%",
+                help="Lowest and highest implied volatility across all points.")
     
-    with col1:
-        st.metric("Spot Price", f"${results['spot_price']:.2f}")
-        st.metric("ATM IV", f"{results['iv_stats']['atm_iv']:.1f}%")
+    surface_tab, data_tab = st.tabs(["Surface", "Data & Export"])
     
-    with col2:
-        st.metric("Valid Options", f"{len(results['ivs'])}")
-        if results['iv_stats']['iv_skew'] is not None:
-            st.metric("IV Skew", f"{results['iv_stats']['iv_skew']:.1f}%")
-        else:
-            st.metric("IV Skew", "N/A")
+    with surface_tab:
+        st.plotly_chart(results['fig'], use_container_width=True)
     
-    with col3:
-        st.metric("Term Structure", f"{results['iv_stats']['term_structure']:.1f}%")
-        st.metric("IV Range", f"{results['iv_stats']['iv_min']:.1f}% - {results['iv_stats']['iv_max']:.1f}%")
-    
-    with col4:
-        st.metric("Avg IV", f"{results['iv_stats']['avg_iv']:.1f}%")
-        st.metric("IV Std Dev", f"{results['iv_stats']['iv_std']:.1f}%")
-    
-    st.caption(
-        f"Built from out-of-the-money options only: {results['n_puts']} puts below the forward price "
-        f"and {results['n_calls']} calls at or above it."
-    )
-    st.caption(
-        f"Dividend yield used: {results['dividend_yield_used'] * 100:.2f}% ({results['dividend_source']})"
-    )
-    if fetched_at is not None:
-        st.caption(
-            f"Data fetched at {fetched_at:%H:%M:%S}, reused for up to {UIConfig.CACHE_TTL_SECONDS // 60} "
-            f"minutes. Use Refresh data for the latest prices."
+    with data_tab:
+        table = results_table(results)
+        st.dataframe(table, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Export data (CSV)",
+            data=table.to_csv(index=False).encode('utf-8'),
+            file_name=f"{results['ticker']}_iv_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime='text/csv'
         )
-    
-    # Export section
-    st.markdown("---")
-    col_export1, col_export2, col_export3 = st.columns([1, 1, 2])
-    
-    with col_export1:
-        if len(results['valid_options']) > 0:
-            df_download = pd.DataFrame({
-                'Strike': [opt['strike'] for opt in results['valid_options']],
-                'Days_to_Expiry': [opt['days_to_expiry'] for opt in results['valid_options']],
-                'IV': [iv * 100 for iv in results['ivs']],
-                'Option_Type': [opt['type'] for opt in results['valid_options']],
-                'Moneyness': [opt['strike']/results['spot_price'] for opt in results['valid_options']]
-            })
-            
-            st.download_button(
-                "Export Data (CSV)",
-                data=df_download.to_csv(index=False).encode('utf-8'),
-                file_name=f"{results['ticker']}_iv_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime='text/csv',
-                use_container_width=True
-            )
 
 
 def main() -> None:
@@ -280,7 +275,7 @@ def main() -> None:
     
     try:
         with st.spinner("Fetching market data..."):
-            chain, fetched_at = cached_chain(params.ticker)
+            chain, _ = cached_chain(params.ticker)
     except Exception as e:
         text = str(e) if isinstance(e, AnalysisError) else f"Analysis Error: {str(e)}"
         st.session_state.fetch_error = {'ticker': params.ticker, 'text': text}
@@ -304,7 +299,7 @@ def main() -> None:
         st.error(f"Analysis Error: {str(e)}")
         return
     
-    render_results(st.session_state.analysis_results, fetched_at)
+    render_results(st.session_state.analysis_results)
 
 
 if __name__ == "__main__":

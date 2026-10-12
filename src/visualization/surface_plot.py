@@ -139,7 +139,7 @@ class SurfacePlotter:
         is_dark = theme.lower() == 'dark'
         text_color = 'white' if is_dark else 'black'
         bg_color = 'rgb(0, 0, 0)' if is_dark else 'white'
-        grid_color = 'rgba(255, 255, 255, 0.2)' if is_dark else 'rgb(180, 180, 180)'
+        grid_color = 'rgb(38, 38, 38)' if is_dark else 'rgb(225, 225, 225)'
         
         # FIXED: Deep copy to prevent mutation of class variable
         colorscale = copy.deepcopy(self.COLORMAP_PRESETS[colormap])
@@ -151,11 +151,19 @@ class SurfacePlotter:
             else:
                 colorscale[0][1] = 'rgb(255,255,255)'
 
+        is_strike = self.data.y_axis_type == 'Strike'
+        font_family = 'IBM Plex Mono, monospace'
+        hover_y = 'Strike: $%{y:,.0f}' if is_strike else 'Moneyness: %{y:.3f}'
+
         fig = go.Figure(data=[
             go.Surface(
                 x=self.expiry_mesh,
                 y=self.strike_mesh,
                 z=self.vol_mesh * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
+                hovertemplate=(
+                    '<b>%{x:.2f} years to expiry</b><br>' + hover_y +
+                    '<br>Implied volatility: %{z:.1f}%<extra></extra>'
+                ),
                 colorscale=colorscale,
                 lighting=dict(
                     ambient=VisualizationConfig.LIGHTING_AMBIENT,
@@ -166,73 +174,55 @@ class SurfacePlotter:
                 ),
                 colorbar=dict(
                     title=dict(
-                        text='IV (%)',
+                        text='Implied volatility',
                         side='top',
-                        font=dict(color=text_color, size=13, family='Arial, sans-serif')
+                        font=dict(color=text_color, size=12, family=font_family)
                     ),
-                    x=1.0,  # Moved closer to plot
+                    x=1.0,
                     y=0.5,
-                    thickness=15,
-                    len=0.75,
-                    tickfont=dict(color=text_color, size=11),
-                    tickformat='.1f'
+                    thickness=14,
+                    len=0.7,
+                    tickfont=dict(color=text_color, size=11, family=font_family),
+                    tickformat='.0f',
+                    ticksuffix='%'
                 )
             )
         ])
 
-        # Create title with ticker
-        title_text = f"{ticker} - Implied Volatility Surface" if ticker else "Implied Volatility Surface"
+        title_text = f"{ticker} implied volatility surface" if ticker else "Implied volatility surface"
+        axis_style = dict(
+            gridcolor=grid_color,
+            linecolor=grid_color,
+            showbackground=True,
+            backgroundcolor=bg_color,
+            title_font=dict(color=text_color, size=13, family=font_family),
+            tickfont=dict(color=text_color, size=10, family=font_family),
+            zerolinecolor=grid_color,
+            showspikes=False
+        )
 
-        # Update layout with theme and config values
         fig.update_layout(
             title=dict(
                 text=title_text,
-                font=dict(size=20, color=text_color, family='Arial, sans-serif', weight='bold'),
-                x=0.5,  # Centre align
+                font=dict(size=18, color=text_color, family=font_family),
+                x=0.5,
                 xanchor='center',
                 y=0.98,
                 yanchor='top'
             ),
             scene=dict(
-                xaxis_title='Time to Expiry (Years)',
-                yaxis_title='Strike ($)' if self.data.y_axis_type == 'Strike' else 'Moneyness',
-                zaxis_title='IV (%)',
+                xaxis_title='Time to expiry (years)',
+                yaxis_title='Strike price ($)' if is_strike else 'Moneyness (strike / spot)',
+                zaxis_title='Implied volatility (%)',
                 camera=dict(
                     up=dict(x=0, y=0, z=1),
                     center=dict(x=0, y=0, z=-0.1),
-                    eye=dict(
-                        x=1.8, 
-                        y=-1.8, 
-                        z=1.3
-                    )
+                    eye=dict(x=1.8, y=-1.8, z=1.3)
                 ),
-                xaxis=dict(
-                    gridcolor=grid_color,
-                    showbackground=True,
-                    backgroundcolor=bg_color,
-                    title_font=dict(color=text_color, size=12),
-                    tickfont=dict(color=text_color, size=10),
-                    zerolinecolor=grid_color,
-                    showspikes=False
-                ),
-                yaxis=dict(
-                    gridcolor=grid_color,
-                    showbackground=True,
-                    backgroundcolor=bg_color,
-                    title_font=dict(color=text_color, size=12),
-                    tickfont=dict(color=text_color, size=10),
-                    zerolinecolor=grid_color,
-                    showspikes=False
-                ),
-                zaxis=dict(
-                    gridcolor=grid_color,
-                    showbackground=True,
-                    backgroundcolor=bg_color,
-                    title_font=dict(color=text_color, size=12),
-                    tickfont=dict(color=text_color, size=10),
-                    zerolinecolor=grid_color,
-                    showspikes=False
-                ),
+                xaxis=dict(**axis_style, tickformat='.2f'),
+                yaxis=dict(**axis_style, tickprefix='$' if is_strike else '',
+                           tickformat=',.0f' if is_strike else '.2f'),
+                zaxis=dict(**axis_style, ticksuffix='%', tickformat='.0f'),
                 bgcolor=bg_color
             ),
             width=VisualizationConfig.DEFAULT_PLOT_WIDTH,
@@ -240,7 +230,8 @@ class SurfacePlotter:
             margin=dict(l=0, r=120, t=60, b=0),
             paper_bgcolor=bg_color,
             plot_bgcolor=bg_color,
-            font=dict(color=text_color, family='Arial, sans-serif'),
+            font=dict(color=text_color, family=font_family),
+            hoverlabel=dict(bgcolor='black', font=dict(family=font_family, color='white')),
             showlegend=False,
             hovermode='closest'
         )
