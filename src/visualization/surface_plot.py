@@ -8,7 +8,7 @@ for all classes and methods.
 import numpy as np
 from scipy.interpolate import griddata
 import plotly.graph_objects as go
-from typing import List, Tuple, Literal, Dict, Any, Optional
+from typing import List, Literal, Dict, Any, Optional
 from dataclasses import dataclass
 import copy
 from src.config.config import VisualizationConfig, StatisticsConfig

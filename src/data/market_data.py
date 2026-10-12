@@ -10,8 +10,8 @@ import math
 import numbers
 import yfinance as yf
 import pandas as pd
-from datetime import datetime, timedelta
-from typing import Any, List, Dict, Mapping, Tuple, Optional
+from datetime import timedelta
+from typing import Any, List, Dict, Mapping, Optional
 from src.utils.logger import setup_logger
 from src.config.config import MarketDataConfig, ModelConfig
 
@@ -212,7 +212,7 @@ class OptionDataFetcher:
             raise
         except Exception as e:
             logger.error(f"Network or API error fetching spot price: {str(e)}")
-            raise ConnectionError(f"Failed to connect to market data provider")
+            raise ConnectionError("Failed to connect to market data provider")
     
     def _fetch_expiration_dates(self) -> List[pd.Timestamp]:
         """

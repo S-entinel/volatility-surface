@@ -11,7 +11,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from dataclasses import dataclass
 from datetime import datetime
-import time
 from typing import Tuple, List, Dict, Optional, Any
 from src.data.market_data import OptionDataFetcher
 from src.data.option_selection import select_otm_options
