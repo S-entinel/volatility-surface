@@ -145,7 +145,8 @@ class OptionDataFetcher:
             risk_free_rate: Risk-free rate in decimal form (default from config)
         
         Returns:
-            DataFrame with prepared option data
+            DataFrame with prepared option data. It holds both calls and puts that pass the
+            quote filters; use ``select_otm_options`` to pick the out-of-the-money side.
             
         Raises:
             ValueError: If input parameters are invalid or no data found
@@ -265,7 +266,10 @@ class OptionDataFetcher:
                             max_strike_pct: float,
                             min_open_interest: int) -> List[Dict]:
         """
-        Fetch option chains for all expiration dates.
+        Fetch calls and puts for all expiration dates.
+        
+        Both sides go through the same quote filters. If either side of an expiry fails to
+        load, that whole expiry is skipped (a one-sided smile would be misleading).
         
         Args:
             exp_dates: List of expiration dates to fetch
@@ -275,36 +279,40 @@ class OptionDataFetcher:
             min_open_interest: Minimum open interest threshold
             
         Returns:
-            List of option data dictionaries
+            List of option data dictionaries (calls and puts)
         """
         option_data = []
         failed_dates = []
+        lowest_strike = spot_price * (min_strike_pct / 100)
+        highest_strike = spot_price * (max_strike_pct / 100)
         
         for exp_date in exp_dates:
             try:
                 opt_chain = self.ticker.option_chain(exp_date.strftime('%Y-%m-%d'))
-                calls = opt_chain.calls
+                days_to_expiry = (exp_date - pd.Timestamp.now().normalize()).days
+                expiry_rows = []
                 
-                # Keep only usable quotes with enough open interest
-                calls = filter_quotes(calls, min_open_interest)
-                
-                # Process each option
-                for _, row in calls.iterrows():
-                    strike = row['strike']
+                for option_type, chain in (('call', opt_chain.calls), ('put', opt_chain.puts)):
+                    # Keep only usable quotes with enough open interest
+                    quoted = filter_quotes(chain, min_open_interest)
                     
-                    # Filter based on strike price range
-                    if (strike >= spot_price * (min_strike_pct / 100) and 
-                        strike <= spot_price * (max_strike_pct / 100)):
+                    for _, row in quoted.iterrows():
+                        strike = row['strike']
                         
-                        option_data.append({
-                            'expiration': exp_date,
-                            'strike': strike,
-                            'price': (row['bid'] + row['ask']) / 2,  # midpoint
-                            'type': 'call',
-                            'volume': row['volume'] if 'volume' in row else 0,
-                            'open_interest': row['openInterest'] if 'openInterest' in row else 0,
-                            'days_to_expiry': (exp_date - pd.Timestamp.now().normalize()).days
-                        })
+                        # Filter based on strike price range
+                        if lowest_strike <= strike <= highest_strike:
+                            expiry_rows.append({
+                                'expiration': exp_date,
+                                'strike': strike,
+                                'price': (row['bid'] + row['ask']) / 2,  # midpoint
+                                'type': option_type,
+                                'volume': row['volume'] if 'volume' in row else 0,
+                                'open_interest': row['openInterest'] if 'openInterest' in row else 0,
+                                'days_to_expiry': days_to_expiry
+                            })
+                
+                # Only keep the expiry once both sides loaded
+                option_data.extend(expiry_rows)
                         
             except Exception as e:
                 failed_dates.append(exp_date)

@@ -295,6 +295,13 @@ class TestPrepareForIVIntegration:
                 'volume': [100, 200, 150],
                 'openInterest': [500, 800, 600]
             })
+            mock_chain.puts = pd.DataFrame({
+                'strike': [95.0, 100.0, 105.0],
+                'bid': [1.0, 3.0, 5.5],
+                'ask': [1.5, 3.5, 6.0],
+                'volume': [80, 120, 60],
+                'openInterest': [400, 700, 300]
+            })
             mock_ticker.return_value.option_chain.return_value = mock_chain
             
             # Mock dividend
@@ -304,8 +311,10 @@ class TestPrepareForIVIntegration:
             result = fetcher.prepare_for_iv()
             
             assert isinstance(result, pd.DataFrame)
-            assert len(result) > 0
+            assert len(result) == 6, "3 calls + 3 puts"
             assert all(col in result.columns for col in ['strike', 'price', 'S', 'T', 'r', 'q'])
+            assert (result['type'] == 'call').sum() == 3
+            assert (result['type'] == 'put').sum() == 3
     
     @pytest.mark.integration
     def test_prepare_for_iv_with_filters(self):
@@ -327,6 +336,14 @@ class TestPrepareForIVIntegration:
                 'volume': [5, 5, 5, 5, 5],
                 'openInterest': [50, 100, 200, 100, 50]
             })
+            # Put at 90 passes; the put at 100 has no open interest, so it is dropped
+            mock_chain.puts = pd.DataFrame({
+                'strike': [90.0, 100.0],
+                'bid': [1.0, 3.0],
+                'ask': [1.5, 3.5],
+                'volume': [500, 500],
+                'openInterest': [100, 0]
+            })
             mock_ticker.return_value.option_chain.return_value = mock_chain
             mock_ticker.return_value.info = {}
             
@@ -337,8 +354,10 @@ class TestPrepareForIVIntegration:
                 min_open_interest=75  # Filter out the 50s
             )
             
-            # Only 90, 100, 110 strikes with open interest >= 75; daily volume is irrelevant
-            assert len(result) == 3
+            # Calls: 90, 100, 110 (open interest >= 75; daily volume is irrelevant). Puts: 90 only.
+            assert len(result) == 4
+            assert (result['type'] == 'call').sum() == 3
+            assert (result['type'] == 'put').sum() == 1
             assert result['strike'].min() >= 90.0
             assert result['strike'].max() <= 110.0
 
@@ -528,3 +547,79 @@ class TestFilterQuotes:
     def test_daily_volume_is_ignored(self):
         """A contract with zero volume today but real open interest must survive."""
         assert len(filter_quotes(self.chain(**{**self.GOOD, 'volume': [0]}), 10)) == 1
+
+
+class TestPutFetching:
+    """Calls and puts are fetched together and filtered by the same rules."""
+
+    @staticmethod
+    def _chain(calls: pd.DataFrame, puts) -> Mock:
+        chain = Mock()
+        chain.calls = calls
+        chain.puts = puts
+        return chain
+
+    @staticmethod
+    def _quotes(strikes, bid, ask, open_interest=500) -> pd.DataFrame:
+        return pd.DataFrame({
+            'strike': strikes,
+            'bid': bid,
+            'ask': ask,
+            'volume': [10] * len(strikes),
+            'openInterest': [open_interest] * len(strikes),
+        })
+
+    @pytest.mark.unit
+    def test_puts_pass_through_the_same_quote_filters(self):
+        """Each put breaks a different rule except the last; only that one survives."""
+        puts = self._quotes(
+            strikes=[90.0, 92.0, 94.0, 96.0, 98.0],
+            bid=[0.0, 1.0, 5.5, 0.01, 2.0],       # zero bid | wide spread | crossed | tiny mid | good
+            ask=[0.5, 3.0, 5.0, 0.02, 2.2],
+        )
+        calls = self._quotes([110.0], [2.0], [2.2])
+
+        with patch('src.data.market_data.yf.Ticker') as mock_ticker:
+            mock_ticker.return_value.option_chain.return_value = self._chain(calls, puts)
+            fetcher = OptionDataFetcher('SPY')
+            rows = fetcher._fetch_option_chains(
+                exp_dates=[pd.Timestamp.now().normalize() + timedelta(days=30)],
+                spot_price=100.0, min_strike_pct=75.0, max_strike_pct=125.0, min_open_interest=10)
+
+        put_rows = [r for r in rows if r['type'] == 'put']
+        assert [r['strike'] for r in put_rows] == [98.0]
+        assert put_rows[0]['price'] == pytest.approx(2.1)
+
+    @pytest.mark.unit
+    def test_puts_respect_the_strike_range(self):
+        puts = self._quotes([70.0, 90.0, 99.0, 130.0], [1.0] * 4, [1.1] * 4)
+        calls = self._quotes([110.0], [2.0], [2.2])
+
+        with patch('src.data.market_data.yf.Ticker') as mock_ticker:
+            mock_ticker.return_value.option_chain.return_value = self._chain(calls, puts)
+            rows = OptionDataFetcher('SPY')._fetch_option_chains(
+                exp_dates=[pd.Timestamp.now().normalize() + timedelta(days=30)],
+                spot_price=100.0, min_strike_pct=80.0, max_strike_pct=120.0, min_open_interest=10)
+
+        assert sorted(r['strike'] for r in rows if r['type'] == 'put') == [90.0, 99.0]
+
+    @pytest.mark.unit
+    @pytest.mark.validation
+    def test_broken_puts_table_skips_the_whole_expiry(self):
+        """If the puts side fails to load, that expiry's calls are not used either."""
+        today = pd.Timestamp.now().normalize()
+        good_date, bad_date = today + timedelta(days=30), today + timedelta(days=60)
+        good = self._chain(self._quotes([105.0], [2.0], [2.2]), self._quotes([95.0], [2.0], [2.2]))
+        bad = self._chain(self._quotes([105.0], [2.0], [2.2]), None)  # puts table missing
+
+        def option_chain(date_text):
+            return good if date_text == good_date.strftime('%Y-%m-%d') else bad
+
+        with patch('src.data.market_data.yf.Ticker') as mock_ticker:
+            mock_ticker.return_value.option_chain.side_effect = option_chain
+            rows = OptionDataFetcher('SPY')._fetch_option_chains(
+                exp_dates=[good_date, bad_date],
+                spot_price=100.0, min_strike_pct=75.0, max_strike_pct=125.0, min_open_interest=10)
+
+        assert {r['expiration'] for r in rows} == {good_date}
+        assert sorted(r['type'] for r in rows) == ['call', 'put']

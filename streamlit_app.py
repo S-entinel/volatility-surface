@@ -12,6 +12,7 @@ from datetime import datetime
 import time
 from typing import Tuple, List, Dict, Optional, Any
 from src.data.market_data import OptionDataFetcher
+from src.data.option_selection import select_otm_options
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
 from src.config.config import (
@@ -347,15 +348,21 @@ def main() -> None:
                     st.error("No valid options data found.")
                     return
                 
-                # Check against minimum threshold from config
-                if len(options_df) < MarketDataConfig.MIN_VALID_OPTIONS:
-                    st.error(f"Insufficient options data. Found {len(options_df)}, need at least {MarketDataConfig.MIN_VALID_OPTIONS}.")
-                    return
-                
                 spot_price = options_df['S'].iloc[0]
                 fetched_dividend = float(options_df['q'].iloc[0])
                 used_dividend = dividend_override if dividend_override is not None else fetched_dividend
                 dividend_source = "manual override" if dividend_override is not None else "looked up"
+                
+                # Out-of-the-money options only: puts below the forward price, calls at or above it
+                options_df = select_otm_options(options_df, risk_free_decimal, used_dividend)
+                
+                # Check against minimum threshold from config
+                if len(options_df) < MarketDataConfig.MIN_VALID_OPTIONS:
+                    st.error(
+                        f"Insufficient options data. Found {len(options_df)} usable out-of-the-money options, "
+                        f"need at least {MarketDataConfig.MIN_VALID_OPTIONS}."
+                    )
+                    return
                 st.success(
                     f"Market data fetched - {ticker} @ ${spot_price:.2f} | "
                     f"dividend yield {used_dividend * 100:.2f}% ({dividend_source})"
@@ -397,7 +404,9 @@ def main() -> None:
                     'iv_stats': iv_stats,
                     'dividend_yield_used': used_dividend,
                     'dividend_source': dividend_source,
-                    'skipped_slice_days': list(plotter.skipped_slice_days)
+                    'skipped_slice_days': list(plotter.skipped_slice_days),
+                    'n_puts': sum(1 for opt in valid_options if opt['type'] == 'put'),
+                    'n_calls': sum(1 for opt in valid_options if opt['type'] == 'call')
                 }
                 st.session_state.should_generate = False
             
@@ -444,6 +453,10 @@ def main() -> None:
             st.metric("Avg IV", f"{results['iv_stats']['avg_iv']:.1f}%")
             st.metric("IV Std Dev", f"{results['iv_stats']['iv_std']:.1f}%")
         
+        st.caption(
+            f"Built from out-of-the-money options only: {results['n_puts']} puts below the forward price "
+            f"and {results['n_calls']} calls at or above it."
+        )
         st.caption(
             f"Dividend yield used: {results['dividend_yield_used'] * 100:.2f}% ({results['dividend_source']})"
         )
