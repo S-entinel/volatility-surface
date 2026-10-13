@@ -12,13 +12,13 @@ from streamlit.testing.v1 import AppTest
 
 from src.analysis import build_heatmap_figure, key_figures
 from src.calculators.implied_volatility import bs_call_price, bs_put_price
-from src.config.config import MarketDataConfig, UIConfig
+from src.config.config import MarketDataConfig, ModelConfig, UIConfig
 
 APP_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "streamlit_app.py").exists())
 APP_PATH = str(APP_ROOT / "streamlit_app.py")
 FETCH = 'src.data.market_data.OptionDataFetcher.prepare_for_iv'
 
-SPOT, RATE, DIVIDEND, VOL = 100.0, 0.015, 0.01, 0.20
+SPOT, RATE, DIVIDEND, VOL = 100.0, ModelConfig.DEFAULT_RISK_FREE_RATE, 0.01, 0.20
 
 
 @pytest.fixture(autouse=True)
@@ -288,7 +288,7 @@ class TestSidebar:
         at, _ = open_app(make_chain())
 
         assert [e.label for e in at.expander] == ["Advanced settings"]
-        assert widget(at.expander[0].number_input, "Risk-free rate (% per year)").value == pytest.approx(1.5)
+        assert widget(at.expander[0].number_input, "Risk-free rate (% per year)").value == pytest.approx(4.2)
         assert widget(at.expander[0].number_input, "Dividend yield (% per year)").value == pytest.approx(1.0)
 
     @pytest.mark.integration

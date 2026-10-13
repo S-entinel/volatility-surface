@@ -1,111 +1,72 @@
-# Volatility Surface Analyser
+# Implied Volatility Surface Explorer
 
-A web application for analysing and visualising implied volatility surfaces from live options market data.
-
-## Overview
-
-The Volatility Surface Analyser fetches options data and computes implied volatilities using the Black-Scholes model with Brent's numerical method. The interactive 3D surface visualisation helps traders and analysts understand volatility patterns across strikes and expirations.
+A web app that builds and visualises implied volatility surfaces from live equity option chains.
 
 **[→ Live Demo](https://volatility-surface-eompm5s2dtuksyhw7z5fea.streamlit.app)**
 
-## Features
+[![Tests](https://github.com/S-entinel/volatility-surface/actions/workflows/ci.yml/badge.svg)](https://github.com/S-entinel/volatility-surface/actions/workflows/ci.yml)
 
-- **Market Data**: Option chains via Yahoo Finance (delayed, unofficial feed)
-- **Interactive 3D Visualisation**: Rotatable volatility surface with customisable themes
-- **Analytics**: ATM IV, skew, term structure, and surface statistics
-- **Engineering**: Type hints throughout, modular architecture, pytest suite
-- **Export**: Download analysis data as CSV
+<!-- Screenshots: add images to docs/ and link them here -->
+<!-- ![Surface](docs/surface.png) -->
 
-## Quick Start
+## What it does
+
+Enter a ticker (SPY, QQQ, AAPL...) and the app fetches the option chain, solves implied volatilities and shows:
+
+- **Key figures:** 30-day ATM implied volatility, 30-day implied move, 30-day 25-delta risk reversal, and term structure (90-day minus 30-day ATM volatility)
+- **Surface tab:** a 3D surface or a heatmap, built either by interpolating the quotes or from a per-expiry SVI fit with arbitrage checks
+- **Smile & Skew tab:** the smile for one expiry, with its ATM volatility, risk reversal and SVI fit
+- **Data & Export tab:** every IV point in a table, with CSV export and an interactive HTML copy of the chart
+
+The strike axis can be shown as strike price or as moneyness, ln(strike / forward), which puts every expiry on the same footing.
+
+## How it works
+
+1. **Data.** Option chains come from Yahoo Finance. Prices are the bid-ask midpoint when there is a live quote, otherwise the last traded price.
+2. **Filtering.** Contracts are dropped if they have no usable price, a mid below $0.05, a bid-ask spread above 50% of the mid, or fewer than 7 days to expiry. The strike range and minimum open interest are set in the sidebar.
+3. **Out-of-the-money selection.** Puts are used below the forward price and calls above it, where they are most liquid and least affected by early exercise.
+4. **Implied volatility.** Each price is inverted through Black-Scholes with Brent's method, after checking it against no-arbitrage bounds.
+5. **SVI fit.** An SVI curve is fitted to each expiry in log-moneyness. Fits are checked for butterfly arbitrage, and neighbouring expiries are checked for calendar arbitrage. The checks are reported, not enforced.
+6. **Key figures.** Read from the SVI curves at the forward price, blended between the two nearest expiries.
+
+## Quick start
 
 ```bash
-# Clone repository
 git clone https://github.com/S-entinel/volatility-surface.git
 cd volatility-surface
 
-# Create a virtual environment (recommended)
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Run application
 streamlit run streamlit_app.py
 ```
 
-Visit `http://localhost:8501` to use the application.
+Then open `http://localhost:8501`. The analysis runs automatically and updates as you change the sidebar.
 
-## Usage
 
-1. Enter a ticker symbol (e.g., SPY, AAPL, TSLA)
-2. Adjust parameters in the sidebar:
-   - Strike price range
-   - Risk-free rate and dividend yield
-   - Visualisation theme and colourmap
-3. Click "Generate Analysis"
-4. Explore the interactive 3D surface and statistics
-
-## Technology Stack
-
-- **Python 3.11**
-- **Streamlit** - Web interface
-- **yfinance** - Market data
-- **Plotly** - 3D visualisation
-- **SciPy** - Implied volatility calculation
-- **NumPy & Pandas** - Data processing
-
-## Project Structure
+## Project structure
 
 ```
 volatility-surface/
 ├── src/
-│   ├── calculators/      # Black-Scholes & IV calculations
-│   ├── data/             # Market data fetching
+│   ├── calculators/      # Black-Scholes pricing and IV solver
+│   ├── data/             # Market data fetching and OTM selection
 │   ├── visualization/    # 3D surface plotting
-│   ├── config/           # Centralised configuration
-│   └── utils/            # Logging utilities
-├── tests/                # Test suite
-├── streamlit_app.py      # Main application
-├── requirements.txt      # Runtime dependencies
-└── requirements-dev.txt  # Test dependencies
+│   ├── config/           # Central configuration
+│   ├── utils/            # Logging
+│   ├── analysis.py       # Pipeline: filter, solve, build figures and key figures
+│   └── svi.py            # SVI fitting and arbitrage checks
+├── tests/
+├── streamlit_app.py      # Web interface
+├── requirements.txt
+└── requirements-dev.txt
 ```
-
-## Development
-
-```bash
-# Install runtime + test dependencies
-pip install -r requirements-dev.txt
-
-# Run all tests with coverage
-pytest
-
-# Run specific test categories
-pytest -m unit
-pytest -m integration
-```
-
-## Configuration
-
-Customise defaults in `src/config/config.py`:
-
-- Strike price ranges
-- Risk-free rate and dividend yield
-- Visualisation settings
-- Data quality thresholds
-
-## Known Limitations
-
-- Yahoo Finance data is delayed and unofficial; it may be stale or unavailable.
-- Black-Scholes assumes European exercise; many listed equity options are American-style.
-- Risk-free rate and dividend yield are user-supplied constants, not term-structure inputs.
-
-These are being addressed in ongoing work.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT. See [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-Built with [Streamlit](https://streamlit.io) and powered by [yfinance](https://github.com/ranaroussi/yfinance).
+Built with [Streamlit](https://streamlit.io), [Plotly](https://plotly.com) and [yfinance](https://github.com/ranaroussi/yfinance).

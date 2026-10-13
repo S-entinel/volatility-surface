@@ -36,8 +36,8 @@ class MarketDataConfig:
 class ModelConfig:
     """Configuration for Black-Scholes model parameters."""
     
-    # Default risk-free rate (as decimal, e.g., 0.015 = 1.5%)
-    DEFAULT_RISK_FREE_RATE: float = 0.015
+    # Default risk-free rate (as decimal, e.g., 0.042 = 4.2%)
+    DEFAULT_RISK_FREE_RATE: float = 0.042
     
     # Default dividend yield (as decimal, e.g., 0.01 = 1%)
     DEFAULT_DIVIDEND_YIELD: float = 0.01

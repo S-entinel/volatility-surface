@@ -56,7 +56,7 @@ class TestModelConfig:
     @pytest.mark.unit
     def test_rate_defaults(self):
         """Test default rates."""
-        assert ModelConfig.DEFAULT_RISK_FREE_RATE == 0.015
+        assert ModelConfig.DEFAULT_RISK_FREE_RATE == 0.042
         assert ModelConfig.DEFAULT_DIVIDEND_YIELD == 0.01
         assert isinstance(ModelConfig.DEFAULT_RISK_FREE_RATE, float)
         assert isinstance(ModelConfig.DEFAULT_DIVIDEND_YIELD, float)
