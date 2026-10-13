@@ -9,7 +9,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from src.data.market_data import OptionDataFetcher
 from src.data.option_selection import select_otm_options
 from src.svi import (
-    BlendedSmile, SviSlice, blended_smile, calendar_check, delta_log_moneyness, fit_slice, surface_iv, total_variance
+    BlendedSmile, SviSlice, blended_smile, calendar_check, delta_log_moneyness, fit_slice, surface_iv,
+    surface_iv_log_moneyness, total_variance
 )
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
@@ -145,95 +146,6 @@ def calculate_ivs(options_df: pd.DataFrame, risk_free_rate: float,
     return ivs, valid_options
 
 
-def calculate_iv_statistics(valid_options: List[Dict[str, Any]], ivs: List[float], 
-                           spot_price: float) -> Dict[str, Optional[float]]:
-    """
-    Calculate key IV statistics for quant research.
-    
-    Args:
-        valid_options: List of valid option dictionaries
-        ivs: List of implied volatilities
-        spot_price: Current spot price
-        
-    Returns:
-        Dictionary containing:
-            - atm_iv: At-the-money implied volatility (%)
-            - iv_skew: IV skew (OTM put - OTM call, %)
-            - term_structure: Term structure (long - short ATM IV, %)
-            - iv_min: Minimum IV across surface (%)
-            - iv_max: Maximum IV across surface (%)
-            - avg_iv: Average IV across surface (%)
-            - iv_std: Standard deviation of IV (%)
-            
-    Example:
-        >>> stats = calculate_iv_statistics(valid_opts, ivs, 100.0)
-        >>> print(f"ATM IV: {stats['atm_iv']:.1f}%")
-    """
-    if len(valid_options) == 0 or len(ivs) == 0:
-        return {
-            'atm_iv': 0.0,
-            'iv_skew': None,
-            'term_structure': 0.0,
-            'iv_min': 0.0,
-            'iv_max': 0.0,
-            'avg_iv': 0.0,
-            'iv_std': 0.0
-        }
-    
-    df = pd.DataFrame({
-        'strike': [opt['strike'] for opt in valid_options],
-        'T': [opt['T'] for opt in valid_options],
-        'iv': ivs,
-        'moneyness': [opt['strike']/spot_price for opt in valid_options]
-    })
-    
-    # ATM IV (using closest to 1.0 moneyness)
-    atm_idx = abs(df['moneyness'] - 1.0).idxmin()
-    atm_iv = df.loc[atm_idx, 'iv']
-    
-    # IV Skew - using config values
-    df_nearest = df[df['T'] == df['T'].min()]
-    if len(df_nearest) > 0:
-        otm_puts = df_nearest[df_nearest['moneyness'] < StatisticsConfig.OTM_PUT_MONEYNESS]['iv']
-        otm_calls = df_nearest[df_nearest['moneyness'] > StatisticsConfig.OTM_CALL_MONEYNESS]['iv']
-        
-        otm_put = otm_puts.mean() if len(otm_puts) > 0 else None
-        otm_call = otm_calls.mean() if len(otm_calls) > 0 else None
-        
-        skew = otm_put - otm_call if (otm_put is not None and otm_call is not None) else None
-    else:
-        skew = None
-    
-    # Term Structure
-    df['atm_dist'] = abs(df['moneyness'] - 1.0)
-    short_term = df[df['T'] == df['T'].min()]
-    long_term = df[df['T'] == df['T'].max()]
-    
-    if len(short_term) > 0 and len(long_term) > 0:
-        short_atm = short_term.loc[short_term['atm_dist'].idxmin(), 'iv']
-        long_atm = long_term.loc[long_term['atm_dist'].idxmin(), 'iv']
-        term_structure = long_atm - short_atm
-    else:
-        term_structure = 0.0
-    
-    # Surface statistics
-    iv_array = np.array(ivs)
-    iv_min = np.min(iv_array)
-    iv_max = np.max(iv_array)
-    avg_iv = np.mean(iv_array)
-    iv_std = np.std(iv_array)
-    
-    return {
-        'atm_iv': atm_iv * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
-        'iv_skew': skew * StatisticsConfig.IV_DISPLAY_MULTIPLIER if skew is not None else None,
-        'term_structure': term_structure * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
-        'iv_min': iv_min * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
-        'iv_max': iv_max * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
-        'avg_iv': avg_iv * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
-        'iv_std': iv_std * StatisticsConfig.IV_DISPLAY_MULTIPLIER
-    }
-
-
 def fit_surface_svi(valid_options: List[Any], ivs: List[float], spot_price: float) -> Dict[str, Any]:
     """Fit an SVI curve to every expiry, check for arbitrage, and evaluate the fitted surface on a grid."""
     groups: Dict[float, List[int]] = {}
@@ -264,8 +176,7 @@ def fit_surface_svi(valid_options: List[Any], ivs: List[float], spot_price: floa
 def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price: float,
                          params: AnalysisParams, svi: Optional[Dict[str, Any]] = None) -> Tuple[go.Figure, List[int]]:
     """Build the 3D surface with smile slices; also return the slices that could not be drawn."""
-    strikes = np.array([opt['strike']/spot_price for opt in valid_options]) if params.y_axis_type == "Moneyness" \
-             else np.array([opt['strike'] for opt in valid_options])
+    strikes = np.array([_axis_value(opt, params.y_axis_type) for opt in valid_options])
     
     surface_data = SurfaceData(
         strikes=strikes,
@@ -277,10 +188,9 @@ def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price:
     
     mesh = None
     if svi is not None and svi['mesh'] is not None:
-        grid = svi['mesh']
-        divisor = spot_price if params.y_axis_type == "Moneyness" else 1.0
-        strike_mesh, expiry_mesh = np.meshgrid(grid['strikes'] / divisor, grid['maturities'])
-        mesh = (strike_mesh, expiry_mesh, np.ma.array(grid['iv'], mask=np.isnan(grid['iv'])))
+        columns, maturities, iv = _svi_grid(svi, params.y_axis_type)
+        strike_mesh, expiry_mesh = np.meshgrid(columns, maturities)
+        mesh = (strike_mesh, expiry_mesh, np.ma.array(iv, mask=np.isnan(iv)))
     
     plotter = SurfacePlotter(surface_data, mesh)
     # Pass ticker to create_surface_plot
@@ -290,6 +200,14 @@ def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price:
         fig = plotter.add_smile_slices(fig, theme=params.theme.lower())
     return fig, list(plotter.skipped_slice_days)
 
+
+AXIS_STRIKE = "Strike Price ($)"
+AXIS_MONEYNESS = "Moneyness"  # the log of strike over forward, so 0 is at the money on every expiry
+AXIS_STYLES = {
+    AXIS_STRIKE: {'title': 'Strike price ($)', 'tickformat': ',.0f', 'tickprefix': '$', 'hover': 'Strike: $%{x:,.0f}'},
+    AXIS_MONEYNESS: {'title': 'Moneyness: ln(strike / forward)', 'tickformat': '.2f', 'tickprefix': '',
+                     'hover': 'Moneyness: %{x:.3f}'},
+}
 
 KEY_FIGURE_NEAR_DAYS = 30
 KEY_FIGURE_FAR_DAYS = 90
@@ -312,6 +230,17 @@ def _atm_volatility(smile: Optional[BlendedSmile], target_days: int) -> Optional
     if smile is None or not smile.k_low <= 0.0 <= smile.k_high:
         return None
     return float(np.sqrt(smile.variance(np.array([0.0]))[0] / (target_days / 365)))
+
+
+def _risk_reversal(smile: BlendedSmile, maturity: float, dividend_yield: float) -> Optional[float]:
+    """25-delta call volatility minus 25-delta put volatility, in volatility points, if the smile covers both."""
+    k_call = delta_log_moneyness(smile, maturity, dividend_yield, 0.25)
+    k_put = delta_log_moneyness(smile, maturity, dividend_yield, -0.25)
+    if k_call is None or k_put is None:
+        return None
+    iv_call = float(np.sqrt(smile.variance(np.array([k_call]))[0] / maturity))
+    iv_put = float(np.sqrt(smile.variance(np.array([k_put]))[0] / maturity))
+    return (iv_call - iv_put) * StatisticsConfig.IV_DISPLAY_MULTIPLIER
 
 
 def key_figures(results: Dict[str, Any]) -> Dict[str, Optional[float]]:
@@ -337,13 +266,7 @@ def key_figures(results: Dict[str, Any]) -> Dict[str, Optional[float]]:
         figures['move_pct'] = one_sigma * multiplier
         figures['move_usd'] = one_sigma * results['spot_price']
     if near is not None and atm_near is not None:
-        maturity = KEY_FIGURE_NEAR_DAYS / 365
-        k_call = delta_log_moneyness(near, maturity, results['dividend_yield_used'], 0.25)
-        k_put = delta_log_moneyness(near, maturity, results['dividend_yield_used'], -0.25)
-        if k_call is not None and k_put is not None:
-            iv_call = float(np.sqrt(near.variance(np.array([k_call]))[0] / maturity))
-            iv_put = float(np.sqrt(near.variance(np.array([k_put]))[0] / maturity))
-            figures['rr_near'] = (iv_call - iv_put) * multiplier
+        figures['rr_near'] = _risk_reversal(near, KEY_FIGURE_NEAR_DAYS / 365, results['dividend_yield_used'])
     atm_far = _atm_volatility(_smile_at(results, days, KEY_FIGURE_FAR_DAYS), KEY_FIGURE_FAR_DAYS)
     if atm_near is not None and atm_far is not None:
         figures['term'] = (atm_far - atm_near) * multiplier
@@ -368,15 +291,45 @@ def _expiry_points(results: Dict[str, Any], expiry_days: int) -> Tuple[List[Any]
     return [opt for opt, _ in pairs], [iv for _, iv in pairs]
 
 
-def smile_stats(results: Dict[str, Any], expiry_days: int) -> Dict[str, Any]:
-    """ATM volatility and skew for a single expiry, defined as in the key figures."""
-    options, ivs = _expiry_points(results, expiry_days)
-    return calculate_iv_statistics(options, ivs, results['spot_price'])
+def smile_stats(results: Dict[str, Any], expiry_days: int) -> Dict[str, Optional[float]]:
+    """ATM volatility (percent) and 25-delta risk reversal (volatility points) for one expiry, None where unavailable."""
+    fit = smile_fit(results, expiry_days)
+    if fit is None:
+        return {'atm_iv': None, 'rr_25': None}
+    smile = blended_smile(fit, fit, fit.maturity)
+    atm = _atm_volatility(smile, expiry_days)
+    return {
+        'atm_iv': None if atm is None else atm * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
+        'rr_25': _risk_reversal(smile, fit.maturity, results['dividend_yield_used']),
+    }
 
 
-def _axis_value(price: float, spot: float, use_moneyness: bool) -> float:
-    """A strike or forward price on the chart's strike axis: dollars, or a multiple of spot."""
-    return float(price) / spot if use_moneyness else float(price)
+def _axis_style(y_axis_type: str) -> Dict[str, str]:
+    """Title, hover text and tick format for the chosen strike axis."""
+    return AXIS_STYLES.get(y_axis_type, AXIS_STYLES[AXIS_STRIKE])
+
+
+def _axis_value(opt: Any, y_axis_type: str, key: str = 'strike') -> float:
+    """A strike (or forward) price of an option on the chosen strike axis: dollars, or ln(price / forward)."""
+    price = float(opt[key])
+    if y_axis_type == AXIS_MONEYNESS:
+        return float(np.log(price / float(opt['forward'])))
+    return price
+
+
+def _curve_axis_values(forward: float, k: np.ndarray, y_axis_type: str) -> np.ndarray:
+    """Positions on the chosen strike axis for log-moneyness values k of a smile with the given forward."""
+    return k if y_axis_type == AXIS_MONEYNESS else forward * np.exp(k)
+
+
+def _svi_grid(svi: Dict[str, Any], y_axis_type: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The SVI surface as columns on the chosen strike axis, maturities and implied volatilities."""
+    mesh = svi['mesh']
+    if y_axis_type != AXIS_MONEYNESS:
+        return mesh['strikes'], mesh['maturities'], mesh['iv']
+    slices = svi['slices']
+    k = np.linspace(min(s.k_min for s in slices), max(s.k_max for s in slices), len(mesh['strikes']))
+    return k, mesh['maturities'], surface_iv_log_moneyness(slices, k, mesh['maturities'])
 
 
 def smile_fit(results: Dict[str, Any], expiry_days: int) -> Optional[SviSlice]:
@@ -397,16 +350,15 @@ def smile_fit(results: Dict[str, Any], expiry_days: int) -> Optional[SviSlice]:
 def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: str) -> go.Figure:
     """Implied volatility against strike for one expiry, with puts and calls in different colours."""
     options, ivs = _expiry_points(results, expiry_days)
-    spot = results['spot_price']
-    use_moneyness = y_axis_type == "Moneyness"
+    style = _axis_style(y_axis_type)
     font = 'IBM Plex Mono, monospace'
     grid = 'rgb(38, 38, 38)'
     multiplier = StatisticsConfig.IV_DISPLAY_MULTIPLIER
     
-    ordered = sorted(zip(options, ivs), key=lambda pair: _axis_value(pair[0]['strike'], spot, use_moneyness))
+    ordered = sorted(zip(options, ivs), key=lambda pair: _axis_value(pair[0], y_axis_type))
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=[_axis_value(opt['strike'], spot, use_moneyness) for opt, _ in ordered], y=[iv * multiplier for _, iv in ordered],
+        x=[_axis_value(opt, y_axis_type) for opt, _ in ordered], y=[iv * multiplier for _, iv in ordered],
         mode='lines', line=dict(color='rgb(70, 70, 70)', width=1), hoverinfo='skip', showlegend=False
     ))
     
@@ -417,7 +369,7 @@ def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: s
             if not points:
                 continue
             fig.add_trace(go.Scatter(
-                x=[_axis_value(opt['strike'], spot, use_moneyness) for opt, _ in points],
+                x=[_axis_value(opt, y_axis_type) for opt, _ in points],
                 y=[iv * multiplier for _, iv in points],
                 mode='markers',
                 name=name + suffix,
@@ -433,24 +385,21 @@ def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: s
     fit = smile_fit(results, expiry_days)
     if fit is not None:
         k = np.linspace(fit.k_min, fit.k_max, 120)
-        strikes = fit.forward * np.exp(k)
         fig.add_trace(go.Scatter(
-            x=strikes / spot if use_moneyness else strikes,
+            x=_curve_axis_values(fit.forward, k, y_axis_type),
             y=np.sqrt(total_variance(k, fit.params) / fit.maturity) * multiplier,
             mode='lines', name='SVI fit', line=dict(color='white', width=2), hoverinfo='skip'
         ))
     
     if options and 'forward' in options[0]:
-        forward = float(options[0]['forward'])
-        fig.add_vline(x=forward / spot if use_moneyness else forward, line_dash='dot',
+        fig.add_vline(x=_axis_value(options[0], y_axis_type, key='forward'), line_dash='dot',
                       line_color='rgb(120, 120, 120)', annotation_text="forward",
                       annotation_font=dict(color='rgb(160, 160, 160)', size=11, family=font))
     
     fig.update_layout(
         paper_bgcolor='rgb(0, 0, 0)', plot_bgcolor='rgb(0, 0, 0)',
         font=dict(family=font, color='white'),
-        xaxis=dict(title='Moneyness (strike / spot)' if use_moneyness else 'Strike price ($)',
-                   tickformat='.2f' if use_moneyness else ',.0f', tickprefix='' if use_moneyness else '$',
+        xaxis=dict(title=style['title'], tickformat=style['tickformat'], tickprefix=style['tickprefix'],
                    gridcolor=grid, zeroline=False),
         yaxis=dict(title='Implied volatility (%)', ticksuffix='%', gridcolor=grid, zeroline=False),
         legend=dict(orientation='h', x=0, y=1.1),
@@ -463,23 +412,22 @@ def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: s
 
 def build_heatmap_figure(results: Dict[str, Any], y_axis_type: str, show_points: bool = False) -> go.Figure:
     """The surface as a 2D heatmap of implied volatility over strike and expiry."""
-    options, ivs, spot = results['valid_options'], results['ivs'], results['spot_price']
-    use_moneyness = y_axis_type == "Moneyness"
+    options, ivs = results['valid_options'], results['ivs']
+    style = _axis_style(y_axis_type)
     font = 'IBM Plex Mono, monospace'
     multiplier = StatisticsConfig.IV_DISPLAY_MULTIPLIER
     
     svi_mesh = (results.get('svi') or {}).get('mesh')
-    point_x = np.array([_axis_value(opt['strike'], spot, use_moneyness) for opt in options])
+    point_x = np.array([_axis_value(opt, y_axis_type) for opt in options])
     point_root = np.sqrt(np.array([opt['T'] for opt in options], dtype=float))
     
     # Own grid for the heatmap: rows evenly spaced in the square root of time, which gives the crowded
     # short expiries more rows, and interpolation on axes scaled to the same range
     size = 80
     if svi_mesh is not None:
-        x = svi_mesh['strikes'] / (spot if use_moneyness else 1.0)
-        maturities = svi_mesh['maturities']
+        x, maturities, svi_iv = _svi_grid(results['svi'], y_axis_type)
         roots = np.sqrt(maturities)
-        z = svi_mesh['iv'] * multiplier
+        z = svi_iv * multiplier
     else:
         x = np.linspace(point_x.min(), point_x.max(), size)
         roots = np.unique(np.concatenate([np.linspace(point_root.min(), point_root.max(), size),
@@ -498,7 +446,7 @@ def build_heatmap_figure(results: Dict[str, Any], y_axis_type: str, show_points:
     # Time is drawn on a square root scale so the crowded short expiries get room; ticks are in years
     tick_years = [t for t in (0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3) if maturities[0] <= t <= maturities[-1]]
     
-    hover_x = 'Moneyness: %{x:.3f}' if use_moneyness else 'Strike: $%{x:,.0f}'
+    hover_x = style['hover']
     fig = go.Figure()
     fig.add_trace(go.Heatmap(
         x=x, y=roots, z=z, colorscale='Viridis', zsmooth='best',
@@ -515,7 +463,7 @@ def build_heatmap_figure(results: Dict[str, Any], y_axis_type: str, show_points:
             if not points:
                 continue
             fig.add_trace(go.Scatter(
-                x=[_axis_value(opt['strike'], spot, use_moneyness) for opt, _ in points], y=[np.sqrt(opt['T']) for opt, _ in points],
+                x=[_axis_value(opt, y_axis_type) for opt, _ in points], y=[np.sqrt(opt['T']) for opt, _ in points],
                 mode='markers', name=name,
                 marker=dict(size=3, symbol=symbol, color='rgba(255, 255, 255, 0.55)', line=dict(width=1)),
                 customdata=[[opt['type'], float(opt['strike']), int(opt['days_to_expiry']), iv * multiplier]
@@ -525,7 +473,7 @@ def build_heatmap_figure(results: Dict[str, Any], y_axis_type: str, show_points:
             ))
     
     if options and 'forward' in options[0]:
-        forwards = {float(opt['T']): _axis_value(opt['forward'], spot, use_moneyness) for opt in options}
+        forwards = {float(opt['T']): _axis_value(opt, y_axis_type, key='forward') for opt in options}
         times = sorted(forwards)
         fig.add_trace(go.Scatter(
             x=[forwards[t] for t in times], y=np.sqrt(times), mode='lines', hoverinfo='skip',
@@ -535,8 +483,7 @@ def build_heatmap_figure(results: Dict[str, Any], y_axis_type: str, show_points:
     fig.update_layout(
         paper_bgcolor='rgb(0, 0, 0)', plot_bgcolor='rgb(0, 0, 0)',
         font=dict(family=font, color='white'),
-        xaxis=dict(title='Moneyness (strike / spot)' if use_moneyness else 'Strike price ($)',
-                   tickformat='.2f' if use_moneyness else ',.0f', tickprefix='' if use_moneyness else '$',
+        xaxis=dict(title=style['title'], tickformat=style['tickformat'], tickprefix=style['tickprefix'],
                    showgrid=False, zeroline=False),
         yaxis=dict(title='Time to expiry (years)', tickmode='array', tickvals=list(np.sqrt(tick_years)),
                    ticktext=[f"{t:g}" for t in tick_years], showgrid=False, zeroline=False),
@@ -597,16 +544,12 @@ def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Option
     svi = fit_surface_svi(valid_options, ivs, spot_price) if params.surface_method == "SVI fit" else None
     fig, skipped_slice_days = build_surface_figure(valid_options, ivs, spot_price, params, svi)
     
-    # Calculate IV statistics
-    iv_stats = calculate_iv_statistics(valid_options, ivs, spot_price)
-    
     results = {
         'fig': fig,
         'spot_price': spot_price,
         'ticker': params.ticker,
         'ivs': ivs,
         'valid_options': valid_options,
-        'iv_stats': iv_stats,
         'dividend_yield_used': used_dividend,
         'dividend_source': dividend_source,
         'skipped_slice_days': skipped_slice_days,

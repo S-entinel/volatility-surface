@@ -135,6 +135,22 @@ def calendar_check(slices: List[SviSlice]) -> Dict[str, object]:
     return {'violations': len(pairs), 'worst': worst, 'pairs': pairs}
 
 
+def _blend_row(ordered: List[SviSlice], times: np.ndarray, maturity: float, k: np.ndarray) -> np.ndarray:
+    """Implied volatility at one maturity for log-moneyness values k, NaN where the fits do not cover them."""
+    j = min(int(np.searchsorted(times, maturity, side='right')) - 1, len(ordered) - 2)
+    earlier, later = ordered[j], ordered[j + 1]
+    weight = float(np.clip((maturity - earlier.maturity) / (later.maturity - earlier.maturity), 0.0, 1.0))
+    variance = (1 - weight) * total_variance(k, earlier.params) + weight * total_variance(k, later.params)
+
+    used = [s for s, w in ((earlier, 1 - weight), (later, weight)) if w > 1e-9]
+    low = max(s.k_min for s in used) - RANGE_PAD
+    high = min(s.k_max for s in used) + RANGE_PAD
+    valid = (k >= low) & (k <= high) & (variance > 0)
+    row = np.full(len(k), np.nan)
+    row[valid] = np.sqrt(variance[valid] / maturity)
+    return row
+
+
 def surface_iv(slices: List[SviSlice], strikes: np.ndarray, maturities: np.ndarray) -> np.ndarray:
     """
     Implied volatility on a grid of maturities (rows) and strikes (columns), NaN where there is no support.
@@ -152,18 +168,23 @@ def surface_iv(slices: List[SviSlice], strikes: np.ndarray, maturities: np.ndarr
     for row, maturity in enumerate(maturities):
         if maturity < times[0] - 1e-12 or maturity > times[-1] + 1e-12:
             continue
-        j = min(int(np.searchsorted(times, maturity, side='right')) - 1, len(ordered) - 2)
-        earlier, later = ordered[j], ordered[j + 1]
-        weight = float(np.clip((maturity - earlier.maturity) / (later.maturity - earlier.maturity), 0.0, 1.0))
-
         k = np.log(strikes / np.exp(np.interp(maturity, times, log_forwards)))
-        variance = (1 - weight) * total_variance(k, earlier.params) + weight * total_variance(k, later.params)
+        grid[row] = _blend_row(ordered, times, maturity, k)
+    return grid
 
-        used = [s for s, w in ((earlier, 1 - weight), (later, weight)) if w > 1e-9]
-        low = max(s.k_min for s in used) - RANGE_PAD
-        high = min(s.k_max for s in used) + RANGE_PAD
-        valid = (k >= low) & (k <= high) & (variance > 0)
-        grid[row, valid] = np.sqrt(variance[valid] / maturity)
+
+def surface_iv_log_moneyness(slices: List[SviSlice], k_grid: np.ndarray, maturities: np.ndarray) -> np.ndarray:
+    """The same surface on a grid of maturities (rows) and log-moneyness values k (columns)."""
+    ordered = sorted(slices, key=lambda s: s.maturity)
+    times = np.array([s.maturity for s in ordered])
+    grid = np.full((len(maturities), len(k_grid)), np.nan)
+    if len(ordered) < 2:
+        return grid
+
+    for row, maturity in enumerate(maturities):
+        if maturity < times[0] - 1e-12 or maturity > times[-1] + 1e-12:
+            continue
+        grid[row] = _blend_row(ordered, times, maturity, k_grid)
     return grid
 
 

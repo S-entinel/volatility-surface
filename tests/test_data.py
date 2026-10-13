@@ -205,7 +205,6 @@ class TestPrepareDataframe:
             assert 'S' in df.columns
             assert 'r' in df.columns
             assert 'q' in df.columns
-            assert 'moneyness' in df.columns
     
     @pytest.mark.unit
     def test_prepare_dataframe_calculates_fields(self):
@@ -236,7 +235,6 @@ class TestPrepareDataframe:
             assert df['T'].iloc[0] == pytest.approx(1.0, rel=0.01)  # 1 year
             assert df['S'].iloc[0] == 100.0
             assert df['r'].iloc[0] == 0.045
-            assert df['moneyness'].iloc[0] == 1.1  # 110/100
 
 
 class TestLogDataQualityMetrics:
@@ -250,8 +248,7 @@ class TestLogDataQualityMetrics:
             
             df = pd.DataFrame({
                 'T': [0.5, 1.0, 1.5],
-                'strike': [95.0, 100.0, 105.0],
-                'moneyness': [0.95, 1.0, 1.05]
+                'strike': [95.0, 100.0, 105.0]
             })
             
             # Should not raise any exceptions

@@ -10,6 +10,7 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
+from src.analysis import build_heatmap_figure, key_figures
 from src.calculators.implied_volatility import bs_call_price, bs_put_price
 from src.config.config import MarketDataConfig, UIConfig
 
@@ -115,15 +116,15 @@ class TestNormalRun:
         results = at.session_state['analysis_results']
 
         assert np.allclose(results['ivs'], VOL, atol=1e-4)
-        assert results['iv_stats']['atm_iv'] == pytest.approx(20.0, abs=0.01)
+        assert key_figures(results)['atm_near'] == pytest.approx(20.0, abs=0.05)
 
     @pytest.mark.integration
-    def test_skew_is_a_number_and_zero_on_a_flat_surface(self):
+    def test_risk_reversal_is_a_number_and_zero_on_a_flat_surface(self):
         at, _ = open_app(make_chain())
-        skew = at.session_state['analysis_results']['iv_stats']['iv_skew']
+        risk_reversal = key_figures(at.session_state['analysis_results'])['rr_near']
 
-        assert skew is not None
-        assert skew == pytest.approx(0.0, abs=0.01)
+        assert risk_reversal is not None
+        assert risk_reversal == pytest.approx(0.0, abs=0.05)
 
     @pytest.mark.integration
     def test_header_line_describes_the_surface(self):
@@ -252,6 +253,19 @@ class TestSviSurface:
 
         assert widget(at.radio, "Surface method").value == "Interpolated"
         assert 'svi' not in at.session_state['analysis_results']
+
+
+class TestMoneynessAxis:
+    @pytest.mark.integration
+    def test_moneyness_is_the_log_of_strike_over_forward(self):
+        at, _ = open_app(make_chain(), [lambda a: y_axis(a, "Moneyness")])
+        results = at.session_state['analysis_results']
+        surface_y = np.asarray(results['fig'].data[0].y, dtype=float)
+        forward_line = build_heatmap_figure(results, "Moneyness").data[-1]
+
+        assert len(at.exception) == 0
+        assert np.nanmax(np.abs(surface_y)) < 1.0  # logs of strike over forward are small; dollar strikes are about 100
+        assert np.allclose(forward_line.x, 0.0)    # the forward is at zero on every expiry
 
 
 class TestSidebar:

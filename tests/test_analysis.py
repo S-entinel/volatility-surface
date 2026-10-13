@@ -7,8 +7,7 @@ import pandas as pd
 import pytest
 
 from src.analysis import (
-    AnalysisError, AnalysisParams, build_surface_figure, calculate_iv_statistics,
-    calculate_ivs, run_analysis
+    AnalysisError, AnalysisParams, build_surface_figure, calculate_ivs, key_figures, run_analysis, smile_stats
 )
 from src.calculators.implied_volatility import bs_call_price, bs_put_price
 from src.config.config import MarketDataConfig, UIConfig
@@ -78,13 +77,13 @@ class TestRunAnalysis:
         results = analyse(make_chain())
 
         assert np.allclose(results['ivs'], VOL, atol=1e-4)
-        assert results['iv_stats']['atm_iv'] == pytest.approx(20.0, abs=0.01)
+        assert key_figures(results)['atm_near'] == pytest.approx(20.0, abs=0.05)
         assert results['spot_price'] == SPOT and results['ticker'] == 'TEST'
 
     @pytest.mark.unit
     def test_result_keys(self):
         assert sorted(analyse(make_chain())) == sorted([
-            'fig', 'spot_price', 'ticker', 'ivs', 'valid_options', 'iv_stats', 'dividend_yield_used',
+            'fig', 'spot_price', 'ticker', 'ivs', 'valid_options', 'dividend_yield_used',
             'dividend_source', 'skipped_slice_days', 'n_puts', 'n_calls'])
 
     @pytest.mark.unit
@@ -184,52 +183,6 @@ def flat_options(days, strikes):
     return [{'strike': float(K), 'T': d / 365} for d in days for K in strikes]
 
 
-class TestCalculateIvStatistics:
-    @pytest.mark.unit
-    def test_empty_input_gives_zeros(self):
-        stats = calculate_iv_statistics([], [], SPOT)
-
-        assert stats['atm_iv'] == 0.0 and stats['iv_skew'] is None and stats['iv_std'] == 0.0
-
-    @pytest.mark.unit
-    def test_flat_surface(self):
-        options = flat_options((30, 90), (90, 100, 110))
-        stats = calculate_iv_statistics(options, [0.20] * len(options), SPOT)
-
-        assert stats['atm_iv'] == pytest.approx(20.0)
-        assert stats['avg_iv'] == pytest.approx(20.0)
-        assert stats['iv_min'] == stats['iv_max'] == pytest.approx(20.0)
-        assert stats['iv_std'] == pytest.approx(0.0, abs=1e-9)
-        assert stats['term_structure'] == pytest.approx(0.0)
-        assert stats['iv_skew'] == pytest.approx(0.0)
-
-    @pytest.mark.unit
-    def test_skew_is_otm_put_minus_otm_call_on_the_nearest_expiry(self):
-        options = flat_options((30,), (90, 100, 110))
-        stats = calculate_iv_statistics(options, [0.25, 0.20, 0.20], SPOT)
-
-        assert stats['iv_skew'] == pytest.approx(5.0)
-
-    @pytest.mark.unit
-    def test_skew_is_none_without_out_of_the_money_calls(self):
-        options = flat_options((30,), (90, 100))
-        assert calculate_iv_statistics(options, [0.25, 0.20], SPOT)['iv_skew'] is None
-
-    @pytest.mark.unit
-    def test_term_structure_is_long_minus_short_atm(self):
-        options = flat_options((30, 180), (100,))
-        stats = calculate_iv_statistics(options, [0.20, 0.25], SPOT)
-
-        assert stats['term_structure'] == pytest.approx(5.0)
-
-    @pytest.mark.unit
-    def test_atm_iv_uses_the_strike_closest_to_spot(self):
-        options = flat_options((30,), (95, 101, 110))
-        stats = calculate_iv_statistics(options, [0.30, 0.22, 0.40], SPOT)
-
-        assert stats['atm_iv'] == pytest.approx(22.0)
-
-
 class TestBuildSurfaceFigure:
     @staticmethod
     def surface(days=(45, 75, 100, 180), **overrides):
@@ -252,8 +205,20 @@ class TestBuildSurfaceFigure:
         assert 30 not in skipped
 
     @pytest.mark.unit
-    def test_moneyness_axis(self):
-        fig, _ = self.surface(y_axis_type="Moneyness")
+    def test_moneyness_axis_is_the_log_of_strike_over_forward(self):
+        options = [{**option, 'forward': 100.0 * (1 + option['T'])}
+                   for option in flat_options((45, 75, 100, 180), np.arange(85.0, 116.0, 5.0))]
+        fig, _ = build_surface_figure(options, [VOL] * len(options), SPOT, make_params(y_axis_type="Moneyness"))
         y = np.asarray(fig.data[0].y, dtype=float)
+        logs = [np.log(option['strike'] / option['forward']) for option in options]
 
-        assert y.min() == pytest.approx(0.85) and y.max() == pytest.approx(1.15)
+        assert y.min() == pytest.approx(min(logs)) and y.max() == pytest.approx(max(logs))
+
+
+class TestSmileStats:
+    @pytest.mark.unit
+    def test_flat_surface_has_a_flat_atm_and_no_risk_reversal(self):
+        stats = smile_stats(analyse(make_chain()), 60)
+
+        assert stats['atm_iv'] == pytest.approx(20.0, abs=0.05)
+        assert stats['rr_25'] == pytest.approx(0.0, abs=0.05)

@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.analysis import AnalysisError, AnalysisParams, analyse_chain, fetch_full_chain, filter_chain, run_analysis
+from src.analysis import (
+    AnalysisError, AnalysisParams, analyse_chain, fetch_full_chain, filter_chain, key_figures, run_analysis
+)
 from src.calculators.implied_volatility import bs_call_price, bs_put_price
 from src.config.config import MarketDataConfig, ModelConfig, UIConfig
 
@@ -118,7 +120,7 @@ class TestAnalyseChain:
         from_narrow = analyse_chain(filter_chain(wide, params), params)
 
         assert from_wide['ivs'] == from_narrow['ivs']
-        assert from_wide['iv_stats'] == from_narrow['iv_stats']
+        assert key_figures(from_wide) == key_figures(from_narrow)
         assert (from_wide['n_puts'], from_wide['n_calls']) == (from_narrow['n_puts'], from_narrow['n_calls'])
 
     @pytest.mark.unit

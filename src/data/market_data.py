@@ -340,7 +340,6 @@ class OptionDataFetcher:
         options_df['S'] = spot_price
         options_df['r'] = risk_free_rate
         options_df['q'] = self.get_dividend_yield(spot_price)
-        options_df['moneyness'] = options_df['strike'] / spot_price
         
         return options_df
     
@@ -360,7 +359,6 @@ class OptionDataFetcher:
         
         logger.info(f"Time to expiry range: {df['T'].min():.2f} - {df['T'].max():.2f} years")
         logger.info(f"Strike range: ${df['strike'].min():.2f} - ${df['strike'].max():.2f}")
-        logger.info(f"Moneyness range: {df['moneyness'].min():.2f} - {df['moneyness'].max():.2f}")
     
     def get_dividend_yield(self, spot_price: Optional[float] = None) -> float:
         """Return the dividend yield as a decimal, e.g. 0.013 for 1.3% (0.0 if unavailable)."""

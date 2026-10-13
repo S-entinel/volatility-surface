@@ -3,7 +3,9 @@
 import numpy as np
 import pytest
 
-from src.svi import SviSlice, butterfly_density, calendar_check, fit_slice, total_variance
+from src.svi import (
+    SviSlice, butterfly_density, calendar_check, fit_slice, surface_iv, surface_iv_log_moneyness, total_variance
+)
 
 
 def slice_with(params, days=30) -> SviSlice:
@@ -45,3 +47,19 @@ class TestArbitrageChecks:
 
         assert crossing['violations'] == 1 and crossing['pairs'] == [(30, 60)]
         assert ordered['violations'] == 0
+
+
+class TestSurfaceGrids:
+    @pytest.mark.unit
+    def test_log_moneyness_grid_matches_the_strike_grid(self):
+        slices = [slice_with((0.02, 0.10, -0.5, 0.00, 0.10), 30),
+                  slice_with((0.05, 0.12, -0.4, 0.01, 0.12), 60),
+                  slice_with((0.09, 0.15, -0.3, 0.02, 0.15), 120)]
+        maturities = np.array([30, 45, 60, 90, 120]) / 365
+        strikes = np.linspace(90.0, 110.0, 9)
+
+        by_strike = surface_iv(slices, strikes, maturities)
+        by_log_moneyness = surface_iv_log_moneyness(slices, np.log(strikes / 100.0), maturities)  # every forward is 100
+
+        assert np.allclose(by_strike, by_log_moneyness, equal_nan=True)
+        assert not np.isnan(by_strike).any()

@@ -224,7 +224,7 @@ class SurfacePlotter:
             ),
             scene=dict(
                 xaxis_title='Time to expiry (years)',
-                yaxis_title='Strike price ($)' if is_strike else 'Moneyness (strike / spot)',
+                yaxis_title='Strike price ($)' if is_strike else 'Moneyness: ln(strike / forward)',
                 zaxis_title='Implied volatility (%)',
                 camera=dict(
                     up=dict(x=0, y=0, z=1),

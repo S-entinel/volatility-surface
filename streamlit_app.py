@@ -20,7 +20,7 @@ from src.config.config import (
 CHART_THEME = UIConfig.AVAILABLE_THEMES[0]
 COLOUR_SCALE = 'Viridis'
 
-STRIKE_AXIS_NAMES = {'Strike Price ($)': 'Strike price ($)', 'Moneyness': 'Moneyness (strike / spot)'}
+STRIKE_AXIS_NAMES = {'Strike Price ($)': 'Strike price ($)', 'Moneyness': 'Moneyness: ln(strike / forward)'}
 
 
 def apply_custom_style() -> None:
@@ -146,7 +146,8 @@ def render_sidebar() -> Tuple[AnalysisParams, bool]:
             "Strike axis",
             options=UIConfig.AVAILABLE_Y_AXIS_TYPES,
             format_func=lambda option: STRIKE_AXIS_NAMES.get(option, option),
-            help="Show strikes as dollar prices, or as a multiple of the current price."
+            help="Show strikes as dollar prices, or as moneyness: the natural log of strike over forward price, "
+                 "so 0 is at the money on every expiry. Moneyness is the axis the SVI fit works in."
         )
         
         surface_method = st.radio(
@@ -219,7 +220,7 @@ def results_table(results: Dict[str, Any]) -> pd.DataFrame:
         'Price_Source': [opt.get('price_source') for opt in options],
         'Open_Interest': [opt.get('open_interest') for opt in options],
         'IV': [round(iv * 100, 4) for iv in results['ivs']],
-        'Moneyness': [round(opt['strike'] / results['spot_price'], 4) for opt in options]
+        'Moneyness': [round(float(np.log(opt['strike'] / opt['forward'])), 4) for opt in options]
     })
 
 
@@ -240,7 +241,7 @@ def render_smile_tab(results: Dict[str, Any], y_axis_type: str) -> None:
     )
     
     stats = smile_stats(results, chosen)
-    skew = f"{stats['iv_skew']:.1f}%" if stats['iv_skew'] is not None else "N/A"
+    atm = "N/A" if stats['atm_iv'] is None else f"{stats['atm_iv']:.1f}%"
     fit = smile_fit(results, chosen)
     fit_text = ""
     if fit is not None:
@@ -248,7 +249,7 @@ def render_smile_tab(results: Dict[str, Any], y_axis_type: str) -> None:
         if not fit.butterfly_ok:
             fit_text += " It allows butterfly arbitrage."
     st.caption(
-        f"At this expiry: ATM IV {stats['atm_iv']:.1f}% · skew {skew} (out-of-the-money put minus call). "
+        f"At this expiry: ATM IV {atm} · 25-delta risk reversal {format_points(stats['rr_25'])}. "
         f"Open circles are last traded prices, not live quotes.{fit_text}"
     )
     st.plotly_chart(build_smile_figure(results, chosen, y_axis_type), use_container_width=True)
