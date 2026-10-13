@@ -2,7 +2,7 @@
 
 A web app that builds and visualises implied volatility surfaces from live equity option chains.
 
-**[→ Live Demo](https://volatility-surface-eompm5s2dtuksyhw7z5fea.streamlit.app)**
+**[→ Live Demo](https://iv-surface-explorer.streamlit.app)**
 
 [![Tests](https://github.com/S-entinel/volatility-surface/actions/workflows/ci.yml/badge.svg)](https://github.com/S-entinel/volatility-surface/actions/workflows/ci.yml)
 
@@ -62,6 +62,15 @@ volatility-surface/
 ├── requirements.txt
 └── requirements-dev.txt
 ```
+
+## Known limitations
+ 
+- **Data source.** Yahoo Finance is delayed and unofficial, and can be stale or unavailable. Last traded prices can be old.
+- **European pricing.** Black-Scholes assumes European exercise, but listed equity options are American. Using only out-of-the-money options reduces the bias without removing it.
+- **Constant rate and yield.** The risk-free rate and dividend yield are single numbers, not a term structure. SPY pays dividends quarterly, so the forward is slightly off around ex-dividend dates.
+- **SVI arbitrage.** Fitted smiles are checked for arbitrage but not forced to be free of it.
+- **Interpolated surface.** The interpolated 3D surface is built from noisy points and can look spiky. The SVI view and the heatmap are the more reliable views.
+- **Filter thresholds** (50% spread, $0.05 minimum price, 7-day minimum expiry) are judgement calls and live in the config file.
 
 ## License
 
