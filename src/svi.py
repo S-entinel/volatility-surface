@@ -5,7 +5,8 @@ from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-from scipy.optimize import least_squares
+from scipy.optimize import brentq, least_squares
+from scipy.stats import norm
 
 MIN_POINTS = 8               # fewest options an expiry needs to be fitted
 BUTTERFLY_TOLERANCE = 1e-6   # density below minus this counts as butterfly arbitrage
@@ -68,6 +69,19 @@ def fit_slice(k: np.ndarray, iv: np.ndarray, maturity: float, days: int = 0,
     return _fit_cached(k.tobytes(), iv.tobytes(), float(maturity), int(days), float(forward))
 
 
+def _model_iv(params: Sequence[float], k: np.ndarray, maturity: float) -> np.ndarray:
+    """The implied volatility an SVI curve gives at log-moneyness k."""
+    return np.sqrt(np.maximum(total_variance(k, params), 1e-12) / maturity)
+
+
+def _slice_residuals(params: np.ndarray, k: np.ndarray, iv: np.ndarray, maturity: float,
+                     grid: np.ndarray) -> np.ndarray:
+    """Volatility errors at the quotes, plus penalties for butterfly arbitrage and negative variance on a grid."""
+    penalty = 0.1 * np.minimum(butterfly_density(grid, params), 0.0) \
+              + np.minimum(total_variance(grid, params), 0.0)
+    return np.concatenate([_model_iv(params, k, maturity) - iv, penalty])
+
+
 @lru_cache(maxsize=512)
 def _fit_cached(k_bytes: bytes, iv_bytes: bytes, maturity: float, days: int, forward: float) -> SviSlice:
     k = np.frombuffer(k_bytes, dtype=float)
@@ -76,14 +90,6 @@ def _fit_cached(k_bytes: bytes, iv_bytes: bytes, maturity: float, days: int, for
     total = iv ** 2 * maturity
     grid = np.linspace(k.min() - 0.05, k.max() + 0.05, 60)
 
-    def model_iv(params: Sequence[float], at: np.ndarray) -> np.ndarray:
-        return np.sqrt(np.maximum(total_variance(at, params), 1e-12) / maturity)
-
-    def residuals(params: np.ndarray) -> np.ndarray:
-        penalty = 0.1 * np.minimum(butterfly_density(grid, params), 0.0) \
-                  + np.minimum(total_variance(grid, params), 0.0)
-        return np.concatenate([model_iv(params, k) - iv, penalty])
-
     lower = np.array([-1.0, 1e-6, -0.999, k.min() - 0.3, 1e-3])
     upper = np.array([total.max(), 5.0, 0.999, k.max() + 0.3, 2.0])
 
@@ -91,17 +97,18 @@ def _fit_cached(k_bytes: bytes, iv_bytes: bytes, maturity: float, days: int, for
     best = None
     for rho0, m0, sigma0 in ((-0.5, 0.0, 0.15), (-0.8, 0.05, 0.05), (-0.3, 0.0, 0.3), (0.0, -0.05, 0.2)):
         start = np.clip([0.5 * total.min(), 0.1, rho0, m0, sigma0], lower, upper)
-        solution = least_squares(residuals, start, bounds=(lower, upper), method='trf', max_nfev=100)
+        solution = least_squares(_slice_residuals, start, bounds=(lower, upper), method='trf', max_nfev=100,
+                                 args=(k, iv, maturity, grid))
         if best is None or solution.cost < best.cost:
             best = solution
-        if np.sqrt(np.mean((model_iv(best.x, k) - iv) ** 2)) < GOOD_ENOUGH:
+        if np.sqrt(np.mean((_model_iv(best.x, k, maturity) - iv) ** 2)) < GOOD_ENOUGH:
             break
 
     params = tuple(float(value) for value in best.x)
     quoted = np.linspace(k.min(), k.max(), 60)
     return SviSlice(
         days=int(days), maturity=float(maturity), forward=float(forward), params=params, n_points=len(k),
-        rmse=float(np.sqrt(np.mean((model_iv(params, k) - iv) ** 2))),
+        rmse=float(np.sqrt(np.mean((_model_iv(params, k, maturity) - iv) ** 2))),
         k_min=float(k.min()), k_max=float(k.max()),
         min_density=float(np.min(butterfly_density(quoted, params)))
     )
@@ -158,3 +165,47 @@ def surface_iv(slices: List[SviSlice], strikes: np.ndarray, maturities: np.ndarr
         valid = (k >= low) & (k <= high) & (variance > 0)
         grid[row, valid] = np.sqrt(variance[valid] / maturity)
     return grid
+
+
+@dataclass(frozen=True)
+class BlendedSmile:
+    """The SVI smile at a maturity between two fitted expiries; its k range is covered by both fits."""
+    earlier: SviSlice
+    later: SviSlice
+    weight: float
+    forward: float
+    k_low: float
+    k_high: float
+
+    def variance(self, k: np.ndarray) -> np.ndarray:
+        """Total variance at log-moneyness k, blended linearly in time between the two expiries."""
+        return ((1 - self.weight) * total_variance(k, self.earlier.params)
+                + self.weight * total_variance(k, self.later.params))
+
+
+def blended_smile(earlier: SviSlice, later: SviSlice, maturity: float) -> BlendedSmile:
+    """Blend the fits of two expiries into a smile for a maturity between them."""
+    span = later.maturity - earlier.maturity
+    weight = float(np.clip((maturity - earlier.maturity) / span, 0.0, 1.0)) if span > 0 else 0.0
+    used = [s for s, w in ((earlier, 1 - weight), (later, weight)) if w > 1e-9]
+    forward = float(np.exp((1 - weight) * np.log(earlier.forward) + weight * np.log(later.forward)))
+    return BlendedSmile(earlier, later, weight, forward,
+                        max(s.k_min for s in used), min(s.k_max for s in used))
+
+
+def _delta_gap(k: float, smile: BlendedSmile, maturity: float, dividend_yield: float, delta: float) -> float:
+    """The Black-Scholes spot delta at log-moneyness k, minus the target delta."""
+    total = float(smile.variance(np.array([k]))[0])
+    d1 = (-k + total / 2) / np.sqrt(total)
+    discount = np.exp(-dividend_yield * maturity)
+    spot_delta = discount * norm.cdf(d1) if delta > 0 else discount * (norm.cdf(d1) - 1)
+    return float(spot_delta - delta)
+
+
+def delta_log_moneyness(smile: BlendedSmile, maturity: float, dividend_yield: float,
+                        delta: float) -> Optional[float]:
+    """The log-moneyness k where a Black-Scholes spot delta equals ``delta`` (positive for calls, negative for puts)."""
+    arguments = (smile, maturity, dividend_yield, delta)
+    if _delta_gap(smile.k_low, *arguments) * _delta_gap(smile.k_high, *arguments) > 0:
+        return None
+    return float(brentq(_delta_gap, smile.k_low, smile.k_high, args=arguments))

@@ -4,10 +4,10 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 from src.analysis import (
     AnalysisError, AnalysisParams, analyse_chain, build_heatmap_figure, build_smile_figure, expiry_labels,
-    fetch_full_chain, figure_html, smile_fit, smile_stats
+    fetch_full_chain, figure_html, key_figures, smile_fit, smile_stats
 )
 from src.config.config import (
     UIConfig, 
@@ -305,26 +305,36 @@ def render_surface_tab(results: Dict[str, Any], y_axis_type: str) -> None:
         st.plotly_chart(results['fig'], use_container_width=True)
 
 
+def format_points(value: Optional[float]) -> str:
+    """A volatility difference in points with its sign, or N/A."""
+    return "N/A" if value is None else f"{round(value, 1) + 0.0:+.1f} pts"
+
+
 def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
     """Draw the header, the key figures, and the Surface and Data & Export tabs."""
     expiries = len({opt['days_to_expiry'] for opt in results['valid_options']})
-    stats = results['iv_stats']
-    
     st.markdown(
         f"**{results['ticker']}** · spot ${results['spot_price']:,.2f} · {len(results['ivs']):,} IV points "
         f"({results['n_puts']:,} puts / {results['n_calls']:,} calls) across {expiries} expiries"
     )
+    figures = key_figures(results)
+    move_label = ("30d Implied Move (1σ)" if figures['move_usd'] is None
+                  else f"30d Implied Move (±${figures['move_usd']:,.2f})")
+    
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("ATM IV", f"{stats['atm_iv']:.1f}%",
-                help="Implied volatility at the strike closest to the current price.")
-    col2.metric("IV Skew", f"{stats['iv_skew']:.1f}%" if stats['iv_skew'] is not None else "N/A",
-                help="Out-of-the-money put volatility minus out-of-the-money call volatility, "
-                     "at the nearest expiry. Positive means downside protection costs more.")
-    col3.metric("Term Structure", f"{stats['term_structure']:.1f}%",
-                help="At-the-money volatility of the longest expiry minus the shortest. "
-                     "Negative means near-term volatility is higher.")
-    col4.metric("IV Range", f"{stats['iv_min']:.1f}% - {stats['iv_max']:.1f}%",
-                help="Lowest and highest implied volatility across all points.")
+    col1.metric("30d ATM IV", "N/A" if figures['atm_near'] is None else f"{figures['atm_near']:.1f}%",
+                help="Implied volatility at the forward price for a 30-day option, read from a smooth SVI curve "
+                     "fitted through the out-of-the-money puts and calls and blended between the two nearest expiries.")
+    col2.metric(move_label, "N/A" if figures['move_pct'] is None else f"±{figures['move_pct']:.1f}%",
+                help="The one-standard-deviation move the options imply by 30 days, as a percentage of the current "
+                     "price and in dollars (in the title): spot × 30-day ATM volatility × √(30/365). If the "
+                     "volatility is right, the price finishes inside this range about two-thirds of the time.")
+    col3.metric("30d Risk Reversal (25Δ)", format_points(figures['rr_near']),
+                help="Volatility of a 25-delta call minus a 25-delta put, at 30 days. Negative means downside "
+                     "puts cost more, which is normal for stocks and indices. More negative is a steeper skew.")
+    col4.metric("Term Structure (90d - 30d)", format_points(figures['term']),
+                help="At-the-money volatility at 90 days minus at 30 days. Positive means calmer near term and "
+                     "more uncertainty later. Negative means near-term stress.")
     
     surface_tab, smile_tab, data_tab = st.tabs(["Surface", "Smile & Skew", "Data & Export"])
     

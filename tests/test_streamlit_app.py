@@ -160,8 +160,11 @@ class TestLayout:
     def test_four_key_figures(self):
         at, _ = open_app(make_chain())
 
-        assert [m.label for m in at.metric] == ["ATM IV", "IV Skew", "Term Structure", "IV Range"]
+        assert [m.label for m in at.metric] == ["30d ATM IV", "30d Implied Move (±$5.73)", "30d Risk Reversal (25Δ)",
+                                               "Term Structure (90d - 30d)"]
         assert at.metric[0].value == "20.0%"
+        assert at.metric[1].value == "±5.7%"  # 20% × sqrt(30/365) of a $100 spot is $5.73
+        assert [m.value for m in at.metric[2:]] == ["+0.0 pts", "+0.0 pts"]  # a flat surface has no skew or slope
 
     @pytest.mark.integration
     def test_tabs(self):
@@ -434,18 +437,20 @@ class FakeYahooOvernight:
     def history(self, period='5d'):
         return pd.DataFrame({'Close': [SPOT]})
 
+    @staticmethod
+    def side(pricer, strikes, maturity):
+        return pd.DataFrame(dict(
+            strike=strikes, bid=0.0, ask=0.0,
+            lastPrice=[pricer(SPOT, K, maturity, RATE, VOL, DIVIDEND) for K in strikes],
+            volume=0.0, openInterest=0.0))
+
     def option_chain(self, date):
         T = (pd.Timestamp(date) - self.today).days / 365
         strikes = np.arange(80.0, 121.0, 2.5)
 
-        def side(pricer):
-            return pd.DataFrame(dict(
-                strike=strikes, bid=0.0, ask=0.0,
-                lastPrice=[pricer(SPOT, K, T, RATE, VOL, DIVIDEND) for K in strikes],
-                volume=0.0, openInterest=0.0))
-
         chain = type('Chain', (), {})()
-        chain.calls, chain.puts = side(bs_call_price), side(bs_put_price)
+        chain.calls = self.side(bs_call_price, strikes, T)
+        chain.puts = self.side(bs_put_price, strikes, T)
         return chain
 
 
