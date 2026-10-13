@@ -373,7 +373,7 @@ def render_results(results: Dict[str, Any], y_axis_type: str) -> None:
 def main() -> None:
     """Streamlit entry point: page setup, sidebar, analysis and results."""
     st.set_page_config(
-        page_title="IV Surface Analysis",
+        page_title="Implied Volatility Surface Explorer",
         page_icon="■",
         layout="wide",
         initial_sidebar_state="expanded"
