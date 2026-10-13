@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from src.analysis import (
-    AnalysisError, AnalysisParams, analyse_chain, fetch_full_chain, filter_chain, key_figures, run_analysis
+    AnalysisError, AnalysisParams, analyse_chain, fetch_full_chain, filter_chain, key_figures
 )
 from src.calculators.implied_volatility import bs_call_price, bs_put_price
 from src.config.config import MarketDataConfig, ModelConfig, UIConfig
@@ -37,7 +37,7 @@ def make_params(**overrides) -> AnalysisParams:
     settings = dict(
         ticker='TEST', min_strike_pct=75.0, max_strike_pct=125.0, min_open_interest=0,
         risk_free_rate=RATE * 100, override_dividend=False, dividend_yield=1.3,
-        theme=UIConfig.AVAILABLE_THEMES[0], colormap=UIConfig.AVAILABLE_COLORMAPS[0],
+        theme=UIConfig.AVAILABLE_THEMES[0], colormap='Viridis',
         y_axis_type=UIConfig.AVAILABLE_Y_AXIS_TYPES[0])
     settings.update(overrides)
     return AnalysisParams(**settings)
@@ -147,12 +147,3 @@ class TestAnalyseChain:
         analyse_chain(make_chain(), make_params(), on_status=lambda kind, text: messages.append(kind))
 
         assert messages == ['success', 'info']
-
-    @pytest.mark.unit
-    def test_run_analysis_still_reports_the_fetch_message_first(self):
-        messages = []
-        with patch('src.data.market_data.OptionDataFetcher.prepare_for_iv', return_value=make_chain()):
-            run_analysis(make_params(), on_status=lambda kind, text: messages.append((kind, text)))
-
-        assert messages[0] == ('info', "Fetching market data...")
-        assert [kind for kind, _ in messages] == ['info', 'success', 'info']

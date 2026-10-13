@@ -208,6 +208,7 @@ class TestBlackScholesGamma:
         # ATM gamma should be high (may not always be highest due to parameters)
         assert atm_gamma > itm_gamma, "ATM gamma should be higher than ITM"
         # Note: OTM can sometimes be close to or slightly higher than ATM
+        assert otm_gamma > itm_gamma, "OTM gamma should be higher than ITM"
     
     @pytest.mark.unit
     @pytest.mark.calculation
@@ -248,14 +249,13 @@ class TestBlackScholesVega:
     @pytest.mark.calculation
     def test_atm_vega_highest(self, atm_call_option: OptionData, itm_call_option: OptionData,
                                otm_call_option: OptionData):
-        """Test ATM options have high vega."""
+        """Vega is higher near the money than deep in the money."""
         atm_vega = BlackScholes.vega(atm_call_option)
         itm_vega = BlackScholes.vega(itm_call_option)
         otm_vega = BlackScholes.vega(otm_call_option)
-        
-        # ATM vega should be high (may not always be highest due to parameters)
+
         assert atm_vega > itm_vega, "ATM vega should be higher than ITM"
-        # Note: OTM can sometimes be close to or slightly higher than ATM
+        assert otm_vega > itm_vega, "OTM vega should be higher than ITM"
     
     @pytest.mark.unit
     @pytest.mark.calculation

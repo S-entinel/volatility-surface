@@ -245,64 +245,6 @@ class TestIVCalculatorValidation:
         assert iv is None, "Should reject price below intrinsic value"
 
 
-class TestIVCalculatorStatistics:
-    """Test statistics tracking functionality."""
-    
-    @pytest.mark.unit
-    def test_statistics_tracking(self, iv_calculator: IVCalculator, atm_call_option: OptionData):
-        """Test that statistics are tracked correctly."""
-        # Reset statistics
-        iv_calculator.reset_statistics()
-        
-        # Perform calculations
-        market_price = BlackScholes.price(atm_call_option)
-        
-        # Successful calculation
-        iv_calculator.calculate_iv(
-            S=atm_call_option.S,
-            K=atm_call_option.K,
-            T=atm_call_option.T,
-            r=atm_call_option.r,
-            q=atm_call_option.q,
-            market_price=market_price,
-            option_type='call'
-        )
-        
-        # Failed calculation (invalid price)
-        iv_calculator.calculate_iv(
-            S=atm_call_option.S,
-            K=atm_call_option.K,
-            T=atm_call_option.T,
-            r=atm_call_option.r,
-            q=atm_call_option.q,
-            market_price=-5.0,  # Invalid
-            option_type='call'
-        )
-        
-        stats = iv_calculator.get_statistics()
-        
-        assert stats['total'] == 2, "Should track 2 total calculations"
-        assert stats['successful'] == 1, "Should have 1 success"
-        assert stats['failed'] == 1, "Should have 1 failure"
-        assert stats['success_rate'] == 50.0, "Success rate should be 50%"
-    
-    @pytest.mark.unit
-    def test_statistics_reset(self, iv_calculator: IVCalculator):
-        """Test statistics reset functionality."""
-        # Do some calculations
-        iv_calculator.calculate_iv(
-            S=100, K=100, T=1, r=0.05, market_price=10, option_type='call'
-        )
-        
-        # Reset
-        iv_calculator.reset_statistics()
-        
-        stats = iv_calculator.get_statistics()
-        assert stats['total'] == 0, "Total should be 0 after reset"
-        assert stats['successful'] == 0, "Successful should be 0 after reset"
-        assert stats['failed'] == 0, "Failed should be 0 after reset"
-
-
 class TestBSHelperFunctions:
     """Test Black-Scholes helper functions."""
     

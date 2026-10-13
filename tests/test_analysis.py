@@ -1,18 +1,15 @@
 """Tests of the analysis module, run directly with no Streamlit involved."""
 
-from unittest.mock import patch
-
 import numpy as np
 import pandas as pd
 import pytest
 
 from src.analysis import (
-    AnalysisError, AnalysisParams, build_surface_figure, calculate_ivs, key_figures, run_analysis, smile_stats
+    AnalysisError, AnalysisParams, analyse_chain, build_surface_figure, calculate_ivs, key_figures, smile_stats
 )
 from src.calculators.implied_volatility import bs_call_price, bs_put_price
 from src.config.config import MarketDataConfig, UIConfig
 
-FETCH = 'src.data.market_data.OptionDataFetcher.prepare_for_iv'
 SPOT, RATE, DIVIDEND, VOL = 100.0, 0.015, 0.01, 0.20
 
 
@@ -37,15 +34,14 @@ def make_params(**overrides) -> AnalysisParams:
     settings = dict(
         ticker='TEST', min_strike_pct=75.0, max_strike_pct=125.0, min_open_interest=0,
         risk_free_rate=RATE * 100, override_dividend=False, dividend_yield=1.3,
-        theme=UIConfig.AVAILABLE_THEMES[0], colormap=UIConfig.AVAILABLE_COLORMAPS[0],
+        theme=UIConfig.AVAILABLE_THEMES[0], colormap='Viridis',
         y_axis_type=UIConfig.AVAILABLE_Y_AXIS_TYPES[0])
     settings.update(overrides)
     return AnalysisParams(**settings)
 
 
 def analyse(chain, **kwargs):
-    with patch(FETCH, return_value=chain):
-        return run_analysis(make_params(), **kwargs)
+    return analyse_chain(chain, make_params(), **kwargs)
 
 
 class TestAnalysisParams:
@@ -59,7 +55,7 @@ class TestAnalysisParams:
         assert make_params(override_dividend=True, dividend_yield=2.0).dividend_override == pytest.approx(0.02)
 
 
-class TestRunAnalysis:
+class TestAnalyseChain:
     @pytest.mark.unit
     def test_uses_only_out_of_the_money_options(self):
         chain = make_chain()
@@ -84,12 +80,11 @@ class TestRunAnalysis:
     def test_result_keys(self):
         assert sorted(analyse(make_chain())) == sorted([
             'fig', 'spot_price', 'ticker', 'ivs', 'valid_options', 'dividend_yield_used',
-            'dividend_source', 'skipped_slice_days', 'n_puts', 'n_calls'])
+            'dividend_source', 'n_puts', 'n_calls'])
 
     @pytest.mark.unit
     def test_dividend_override_is_used(self):
-        with patch(FETCH, return_value=make_chain()):
-            results = run_analysis(make_params(override_dividend=True, dividend_yield=3.0))
+        results = analyse_chain(make_chain(), make_params(override_dividend=True, dividend_yield=3.0))
 
         assert results['dividend_source'] == "manual override"
         assert results['dividend_yield_used'] == pytest.approx(0.03)
@@ -99,10 +94,9 @@ class TestRunAnalysis:
         messages = []
         analyse(make_chain(), on_status=lambda kind, text: messages.append((kind, text)))
 
-        assert [kind for kind, _ in messages] == ['info', 'success', 'info']
-        assert messages[0][1] == "Fetching market data..."
-        assert messages[1][1].startswith("Market data fetched - TEST @ $100.00")
-        assert messages[2][1] == "Computing implied volatilities..."
+        assert [kind for kind, _ in messages] == ['success', 'info']
+        assert messages[0][1].startswith("Market data fetched - TEST @ $100.00")
+        assert messages[1][1] == "Computing implied volatilities..."
 
     @pytest.mark.unit
     def test_progress_is_reported_for_every_option(self):
@@ -117,33 +111,24 @@ class TestRunAnalysis:
         assert len(analyse(make_chain())['ivs']) > 10
 
 
-class TestRunAnalysisErrors:
+class TestAnalyseChainErrors:
     @pytest.mark.unit
     def test_empty_fetch_result(self):
-        with patch(FETCH, return_value=make_chain().iloc[0:0]):
-            with pytest.raises(AnalysisError, match="No valid options data found"):
-                run_analysis(make_params())
+        with pytest.raises(AnalysisError, match="No valid options data found"):
+            analyse_chain(make_chain().iloc[0:0], make_params())
 
     @pytest.mark.unit
     def test_too_few_out_of_the_money_options(self):
         chain = make_chain(days=(30,), strikes=np.array([95.0, 105.0]))
-        with patch(FETCH, return_value=chain):
-            with pytest.raises(AnalysisError, match="Insufficient options data. Found 2 usable"):
-                run_analysis(make_params())
+        with pytest.raises(AnalysisError, match="Insufficient options data. Found 2 usable"):
+            analyse_chain(chain, make_params())
 
     @pytest.mark.unit
     def test_unsolvable_prices(self):
         chain = make_chain(days=(30, 60, 90))
         chain['price'] = 1e6
-        with patch(FETCH, return_value=chain):
-            with pytest.raises(AnalysisError, match="Insufficient valid options"):
-                run_analysis(make_params())
-
-    @pytest.mark.unit
-    def test_fetch_errors_pass_through(self):
-        with patch(FETCH, side_effect=ValueError("No valid option data available after filtering")):
-            with pytest.raises(ValueError, match="No valid option data"):
-                run_analysis(make_params())
+        with pytest.raises(AnalysisError, match="Insufficient valid options"):
+            analyse_chain(chain, make_params())
 
 
 class TestCalculateIvs:
@@ -190,25 +175,16 @@ class TestBuildSurfaceFigure:
         return build_surface_figure(options, [VOL] * len(options), SPOT, make_params(**overrides))
 
     @pytest.mark.unit
-    def test_figure_has_a_surface_and_slices(self):
-        fig, skipped = self.surface()
+    def test_figure_has_a_surface(self):
+        fig = self.surface()
 
         assert fig.data[0].type == 'surface'
-        assert len(fig.data) > 1
-
-    @pytest.mark.unit
-    def test_unavailable_slices_are_returned(self):
-        _, skipped = self.surface(days=(45, 75, 100, 180))
-        assert 30 in skipped
-
-        _, skipped = self.surface(days=(20, 60, 100, 180))
-        assert 30 not in skipped
 
     @pytest.mark.unit
     def test_moneyness_axis_is_the_log_of_strike_over_forward(self):
         options = [{**option, 'forward': 100.0 * (1 + option['T'])}
                    for option in flat_options((45, 75, 100, 180), np.arange(85.0, 116.0, 5.0))]
-        fig, _ = build_surface_figure(options, [VOL] * len(options), SPOT, make_params(y_axis_type="Moneyness"))
+        fig = build_surface_figure(options, [VOL] * len(options), SPOT, make_params(y_axis_type="Moneyness"))
         y = np.asarray(fig.data[0].y, dtype=float)
         logs = [np.log(option['strike'] / option['forward']) for option in options]
 

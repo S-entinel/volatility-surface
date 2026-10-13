@@ -203,7 +203,6 @@ def render_sidebar() -> Tuple[AnalysisParams, bool]:
         theme=CHART_THEME,
         colormap=COLOUR_SCALE,
         y_axis_type=y_axis_type,
-        show_slices=False,
         surface_method=surface_method
     )
     return params, refresh
@@ -381,7 +380,7 @@ def main() -> None:
     
     apply_custom_style()
     
-    st.title("Implied Volatility Surface Analysis")
+    st.title("Implied Volatility Surface Explorer")
     
     params, refresh = render_sidebar()
     

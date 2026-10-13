@@ -8,7 +8,7 @@ for all classes and methods.
 import numpy as np
 from scipy.interpolate import griddata
 import plotly.graph_objects as go
-from typing import List, Literal, Dict, Any, Optional, Tuple
+from typing import Literal, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import copy
 from src.config.config import VisualizationConfig, StatisticsConfig
@@ -81,9 +81,6 @@ class SurfacePlotter:
 
     def __init__(self, surface_data: SurfaceData, mesh: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None):
         self.data = surface_data
-        # Filled in by add_smile_slices: which requested slices were drawn / skipped (in days)
-        self.drawn_slice_days: List[int] = []
-        self.skipped_slice_days: List[int] = []
         if mesh is None:
             self._prepare_mesh()
         else:
@@ -247,88 +244,5 @@ class SurfacePlotter:
             showlegend=False,
             hovermode='closest'
         )
-
-        return fig
-
-    def add_smile_slices(self, fig: go.Figure, theme: str = 'dark',
-                        expiry_days: Optional[List[int]] = None) -> go.Figure:
-        """
-        Add labelled volatility smile curves at specific times to expiry.
-
-        Each slice is interpolated at *exactly* the requested maturity (between the two
-        nearest mesh rows), so it lies on the plotted surface and the label is truthful.
-        A requested maturity outside the range covered by the data is not drawn (drawing
-        the nearest available expiry under the wrong label would be misleading); such
-        requests are recorded in ``skipped_slice_days`` so the caller can tell the user.
-
-        Args:
-            fig: Existing Plotly Figure to add smile slices to
-            theme: Theme name ('dark' or 'light') for line colour
-            expiry_days: List of expiry days to show slices (default from config)
-
-        Returns:
-            Updated Plotly Figure with smile slice overlays
-
-        Example:
-            >>> fig = plotter.create_surface_plot()
-            >>> fig = plotter.add_smile_slices(fig, expiry_days=[30, 60, 90])
-            >>> plotter.skipped_slice_days   # e.g. [30] if the data starts at 45 days
-        """
-        if expiry_days is None:
-            expiry_days = VisualizationConfig.DEFAULT_SMILE_DAYS
-
-        line_color = 'rgba(255,255,255,0.8)' if theme.lower() == 'dark' else 'rgba(0,0,0,0.8)'
-
-        maturities = self.expiry_mesh[:, 0]   # ascending: one value per mesh row
-        strikes = self.strike_mesh[0]         # identical for every row
-        vols = np.ma.filled(self.vol_mesh.astype(float), np.nan)
-        half_day = 0.5 / 365                  # accept a request for the first/last expiry day itself
-
-        self.drawn_slice_days = []
-        self.skipped_slice_days = []
-
-        for days in expiry_days:
-            maturity = days / 365
-
-            if maturity < maturities[0] - half_day or maturity > maturities[-1] + half_day:
-                self.skipped_slice_days.append(days)
-                continue
-
-            maturity = float(np.clip(maturity, maturities[0], maturities[-1]))
-
-            # Linear interpolation between the two mesh rows either side of the maturity
-            upper = int(np.clip(np.searchsorted(maturities, maturity), 1, len(maturities) - 1))
-            lower = upper - 1
-            span = maturities[upper] - maturities[lower]
-            weight = (maturity - maturities[lower]) / span if span > 0 else 0.0
-            slice_vols = (1 - weight) * vols[lower] + weight * vols[upper]
-
-            finite = np.isfinite(slice_vols)
-            if not finite.any():
-                # The surface has no values at this maturity (all interpolated points missing)
-                self.skipped_slice_days.append(days)
-                continue
-
-            # Put the text label on the last point that has a value
-            labels = [''] * len(strikes)
-            labels[int(np.flatnonzero(finite)[-1])] = f"{days}d"
-
-            fig.add_trace(
-                go.Scatter3d(
-                    x=np.full(len(strikes), maturity),
-                    y=strikes,
-                    z=slice_vols * StatisticsConfig.IV_DISPLAY_MULTIPLIER,
-                    mode='lines+text',
-                    text=labels,
-                    textposition='top center',
-                    textfont=dict(color=line_color, size=12),
-                    line=dict(color=line_color, width=VisualizationConfig.SMILE_LINE_WIDTH),
-                    name=f"{days}d",
-                    hovertemplate=(f"{days}d<br>{self.data.y_axis_type}: %{{y:.3g}}"
-                                   "<br>IV: %{z:.1f}%<extra></extra>"),
-                    showlegend=False
-                )
-            )
-            self.drawn_slice_days.append(days)
 
         return fig

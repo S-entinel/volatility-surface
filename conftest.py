@@ -6,17 +6,11 @@ Provides reusable test data and configurations across all test modules.
 
 import pytest
 import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta
 from typing import Dict, Any
 
 from src.calculators.black_scholes import OptionData, BlackScholes
 from src.calculators.implied_volatility import IVCalculator
-from src.config.config import (
-    MarketDataConfig,
-    ModelConfig,
-    IVCalculationConfig
-)
+from src.config.config import ModelConfig
 
 
 # ============================================================================
@@ -232,41 +226,6 @@ def black_scholes() -> BlackScholes:
 
 
 # ============================================================================
-# Options DataFrame Fixtures
-# ============================================================================
-
-@pytest.fixture
-def sample_options_dataframe() -> pd.DataFrame:
-    """Sample options DataFrame for testing."""
-    today = pd.Timestamp.now().normalize()
-    
-    data = {
-        'strike': [95.0, 100.0, 105.0, 110.0],
-        'expiration': [today + timedelta(days=30)] * 4,
-        'price': [7.5, 5.0, 3.0, 1.5],
-        'type': ['call'] * 4,
-        'volume': [100, 200, 150, 80],
-        'days_to_expiry': [30] * 4,
-        'T': [30/365] * 4,
-        'S': [100.0] * 4,
-        'r': [0.045] * 4,
-        'q': [0.01] * 4,
-        'moneyness': [0.95, 1.0, 1.05, 1.1]
-    }
-    
-    return pd.DataFrame(data)
-
-
-@pytest.fixture
-def empty_options_dataframe() -> pd.DataFrame:
-    """Empty options DataFrame for edge case testing."""
-    return pd.DataFrame(columns=[
-        'strike', 'expiration', 'price', 'type', 'volume',
-        'days_to_expiry', 'T', 'S', 'r', 'q', 'moneyness'
-    ])
-
-
-# ============================================================================
 # Surface Data Fixtures
 # ============================================================================
 
@@ -337,44 +296,3 @@ def price_tolerance() -> float:
 def iv_tolerance() -> float:
     """Acceptable tolerance for IV comparisons."""
     return 0.0001  # 0.01%
-
-
-@pytest.fixture
-def greek_tolerance() -> float:
-    """Acceptable tolerance for Greek comparisons."""
-    return 0.0001
-
-
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-def assert_prices_close(actual: float, expected: float, tolerance: float = 0.01) -> None:
-    """
-    Assert two prices are close within tolerance.
-    
-    Args:
-        actual: Actual price
-        expected: Expected price
-        tolerance: Acceptable difference (default $0.01)
-    """
-    assert abs(actual - expected) < tolerance, \
-        f"Price mismatch: {actual} vs {expected} (tolerance: {tolerance})"
-
-
-def assert_ivs_close(actual: float, expected: float, tolerance: float = 0.0001) -> None:
-    """
-    Assert two IVs are close within tolerance.
-    
-    Args:
-        actual: Actual IV
-        expected: Expected IV
-        tolerance: Acceptable difference (default 0.01%)
-    """
-    assert abs(actual - expected) < tolerance, \
-        f"IV mismatch: {actual} vs {expected} (tolerance: {tolerance})"
-
-
-# Export utility functions
-pytest.assert_prices_close = assert_prices_close
-pytest.assert_ivs_close = assert_ivs_close

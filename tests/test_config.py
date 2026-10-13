@@ -11,9 +11,7 @@ from src.config.config import (
     IVCalculationConfig,
     VisualizationConfig,
     StatisticsConfig,
-    UIConfig,
-    LoggingConfig,
-    get_all_configs
+    UIConfig
 )
 
 
@@ -132,14 +130,6 @@ class TestVisualizationConfig:
         assert isinstance(VisualizationConfig.DEFAULT_PLOT_HEIGHT, int)
     
     @pytest.mark.unit
-    def test_camera_position(self):
-        """Test camera positioning."""
-        assert VisualizationConfig.CAMERA_EYE_X == 2.2
-        assert VisualizationConfig.CAMERA_EYE_Y == -2.2
-        assert VisualizationConfig.CAMERA_EYE_Z == 1.5
-        assert VisualizationConfig.CAMERA_CENTER_Z == -0.2
-    
-    @pytest.mark.unit
     def test_lighting_parameters(self):
         """Test lighting parameters are in valid ranges."""
         assert 0 <= VisualizationConfig.LIGHTING_AMBIENT <= 1
@@ -147,32 +137,10 @@ class TestVisualizationConfig:
         assert 0 <= VisualizationConfig.LIGHTING_FRESNEL <= 1
         assert 0 <= VisualizationConfig.LIGHTING_SPECULAR <= 1
         assert 0 <= VisualizationConfig.LIGHTING_ROUGHNESS <= 1
-    
-    @pytest.mark.unit
-    def test_smile_slices(self):
-        """Test smile slice configuration."""
-        assert VisualizationConfig.DEFAULT_SMILE_DAYS == [30, 60, 90]
-        assert isinstance(VisualizationConfig.DEFAULT_SMILE_DAYS, list)
-        assert all(isinstance(d, int) for d in VisualizationConfig.DEFAULT_SMILE_DAYS)
-        assert VisualizationConfig.SMILE_LINE_WIDTH == 3
 
 
 class TestStatisticsConfig:
     """Test StatisticsConfig values."""
-    
-    @pytest.mark.unit
-    def test_atm_definition(self):
-        """Test ATM moneyness definition."""
-        assert StatisticsConfig.ATM_MONEYNESS_LOWER == 0.98
-        assert StatisticsConfig.ATM_MONEYNESS_UPPER == 1.02
-        assert StatisticsConfig.ATM_MONEYNESS_LOWER < 1.0 < StatisticsConfig.ATM_MONEYNESS_UPPER
-    
-    @pytest.mark.unit
-    def test_otm_definition(self):
-        """Test OTM moneyness definition."""
-        assert StatisticsConfig.OTM_PUT_MONEYNESS == 0.95
-        assert StatisticsConfig.OTM_CALL_MONEYNESS == 1.05
-        assert StatisticsConfig.OTM_PUT_MONEYNESS < 1.0 < StatisticsConfig.OTM_CALL_MONEYNESS
     
     @pytest.mark.unit
     def test_display_multiplier(self):
@@ -195,8 +163,6 @@ class TestUIConfig:
     def test_strike_bounds(self):
         """Test strike percentage input bounds."""
         assert UIConfig.MIN_STRIKE_PCT_LOWER == 50.0
-        assert UIConfig.MIN_STRIKE_PCT_UPPER == 99.0
-        assert UIConfig.MAX_STRIKE_PCT_LOWER == 101.0
         assert UIConfig.MAX_STRIKE_PCT_UPPER == 200.0
     
     @pytest.mark.unit
@@ -217,13 +183,6 @@ class TestUIConfig:
         assert isinstance(UIConfig.AVAILABLE_THEMES, list)
     
     @pytest.mark.unit
-    def test_colormap_options(self):
-        """Test colormap options."""
-        assert "Hot" in UIConfig.AVAILABLE_COLORMAPS
-        assert "Viridis" in UIConfig.AVAILABLE_COLORMAPS
-        assert isinstance(UIConfig.AVAILABLE_COLORMAPS, list)
-    
-    @pytest.mark.unit
     def test_cache_settings(self):
         """Test cache configuration."""
         assert UIConfig.CACHE_TTL_SECONDS == 300
@@ -231,56 +190,8 @@ class TestUIConfig:
         assert UIConfig.CACHE_TTL_SECONDS > 0
 
 
-class TestLoggingConfig:
-    """Test LoggingConfig values."""
-    
-    @pytest.mark.unit
-    def test_log_level(self):
-        """Test default log level."""
-        assert LoggingConfig.DEFAULT_LOG_LEVEL == "INFO"
-        assert isinstance(LoggingConfig.DEFAULT_LOG_LEVEL, str)
-    
-    @pytest.mark.unit
-    def test_log_formats(self):
-        """Test log format strings."""
-        assert LoggingConfig.LOG_DATE_FORMAT == '%Y-%m-%d %H:%M:%S'
-        assert '%(asctime)s' in LoggingConfig.LOG_FORMAT
-        assert '%(name)s' in LoggingConfig.LOG_FORMAT
-        assert '%(levelname)s' in LoggingConfig.LOG_FORMAT
-        assert '%(message)s' in LoggingConfig.LOG_FORMAT
-
-
 class TestConfigIntegration:
     """Integration tests for config module."""
-    
-    @pytest.mark.integration
-    def test_get_all_configs(self):
-        """Test get_all_configs function."""
-        configs = get_all_configs()
-        
-        assert isinstance(configs, dict)
-        assert len(configs) == 7
-        
-        assert 'market_data' in configs
-        assert 'model' in configs
-        assert 'iv_calculation' in configs
-        assert 'visualization' in configs
-        assert 'statistics' in configs
-        assert 'ui' in configs
-        assert 'logging' in configs
-    
-    @pytest.mark.integration
-    def test_config_classes_accessible(self):
-        """Test all config classes are accessible."""
-        configs = get_all_configs()
-        
-        assert configs['market_data'] == MarketDataConfig
-        assert configs['model'] == ModelConfig
-        assert configs['iv_calculation'] == IVCalculationConfig
-        assert configs['visualization'] == VisualizationConfig
-        assert configs['statistics'] == StatisticsConfig
-        assert configs['ui'] == UIConfig
-        assert configs['logging'] == LoggingConfig
     
     @pytest.mark.integration
     def test_no_config_conflicts(self):

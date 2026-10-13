@@ -6,7 +6,7 @@ Tests logger setup, configuration, and utility functions.
 
 import pytest
 import logging
-from src.utils.logger import setup_logger, set_log_level, get_logger
+from src.utils.logger import setup_logger
 
 
 class TestLoggerSetup:
@@ -67,79 +67,6 @@ class TestLoggerSetup:
         logger.error("Error message")
 
 
-class TestSetLogLevel:
-    """Test set_log_level functionality."""
-    
-    @pytest.mark.unit
-    def test_set_log_level_changes_level(self):
-        """Test that set_log_level changes the logger level."""
-        logger = setup_logger('test_set_level', level=logging.INFO)
-        
-        set_log_level(logger, logging.DEBUG)
-        
-        assert logger.level == logging.DEBUG
-    
-    @pytest.mark.unit
-    def test_set_log_level_updates_handlers(self):
-        """Test that set_log_level updates handler levels."""
-        logger = setup_logger('test_set_handler_level', level=logging.INFO)
-        
-        set_log_level(logger, logging.WARNING)
-        
-        for handler in logger.handlers:
-            assert handler.level == logging.WARNING
-    
-    @pytest.mark.unit
-    def test_set_log_level_all_levels(self):
-        """Test setting all standard log levels."""
-        logger = setup_logger('test_all_levels')
-        
-        levels = [
-            logging.DEBUG,
-            logging.INFO,
-            logging.WARNING,
-            logging.ERROR,
-            logging.CRITICAL
-        ]
-        
-        for level in levels:
-            set_log_level(logger, level)
-            assert logger.level == level
-
-
-class TestGetLogger:
-    """Test get_logger functionality."""
-    
-    @pytest.mark.unit
-    def test_get_logger_returns_existing(self):
-        """Test get_logger returns existing logger."""
-        # Create a logger
-        original = setup_logger('test_get_existing')
-        
-        # Get it back
-        retrieved = get_logger('test_get_existing')
-        
-        assert retrieved is not None
-        assert retrieved.name == 'test_get_existing'
-        assert retrieved is original
-    
-    @pytest.mark.unit
-    def test_get_logger_returns_none_for_nonexistent(self):
-        """Test get_logger returns None for non-existent logger."""
-        result = get_logger('this_logger_does_not_exist_xyz123')
-        
-        assert result is None
-    
-    @pytest.mark.unit
-    def test_get_logger_without_handlers(self):
-        """Test get_logger returns None for logger without handlers."""
-        # Get the base logging module logger (has no handlers by default)
-        result = get_logger('some.random.name.without.handlers')
-        
-        # Should return None since it has no handlers
-        assert result is None
-
-
 class TestLoggerIntegration:
     """Integration tests for logger module."""
     
@@ -168,14 +95,6 @@ class TestLoggerIntegration:
         # Setup
         logger = setup_logger('test_workflow', level=logging.INFO)
         assert logger.level == logging.INFO
-        
-        # Change level
-        set_log_level(logger, logging.DEBUG)
-        assert logger.level == logging.DEBUG
-        
-        # Retrieve
-        retrieved = get_logger('test_workflow')
-        assert retrieved is logger
         
         # Log at various levels
         logger.debug("Debug test")
@@ -254,26 +173,3 @@ class TestLoggerEdgeCases:
         
         assert logger is not None
         assert logger.name == 'test.logger-with_special/chars'
-    
-    @pytest.mark.edge_case
-    def test_set_log_level_invalid_level(self):
-        """Test set_log_level with invalid level."""
-        logger = setup_logger('test_invalid_level')
-        
-        # Python logging allows any integer, but should handle gracefully
-        try:
-            set_log_level(logger, 99999)
-            # If it doesn't raise, check it was set
-            assert logger.level == 99999
-        except (ValueError, TypeError):
-            # If it raises, that's also acceptable
-            pass
-    
-    @pytest.mark.edge_case
-    def test_get_logger_case_sensitive(self):
-        """Test get_logger is case sensitive."""
-        logger_lower = setup_logger('test_case')
-        logger_upper = get_logger('TEST_CASE')
-        
-        # Should not find it (case sensitive)
-        assert logger_upper is None or logger_upper.name != 'test_case'

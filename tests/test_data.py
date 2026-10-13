@@ -6,8 +6,8 @@ Uses mocking to test data fetching without actual API calls.
 
 import pytest
 import pandas as pd
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from datetime import timedelta
+from unittest.mock import Mock, patch
 from src.data.market_data import (
     OptionDataFetcher, resolve_dividend_yield, filter_quotes, MAX_PLAUSIBLE_DIVIDEND_YIELD
 )

@@ -7,7 +7,6 @@ Provides consistent logging format across all modules with complete type hints:
 
 import logging
 import sys
-from typing import Optional
 
 
 def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
@@ -48,42 +47,3 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     logger.addHandler(handler)
     
     return logger
-
-
-def set_log_level(logger: logging.Logger, level: int) -> None:
-    """
-    Change the log level of an existing logger.
-    
-    Args:
-        logger: Logger instance to modify
-        level: New logging level (e.g., logging.DEBUG, logging.WARNING)
-        
-    Returns:
-        None
-        
-    Example:
-        >>> logger = setup_logger(__name__)
-        >>> set_log_level(logger, logging.DEBUG)
-    """
-    logger.setLevel(level)
-    for handler in logger.handlers:
-        handler.setLevel(level)
-
-
-def get_logger(name: str) -> Optional[logging.Logger]:
-    """
-    Get an existing logger by name.
-    
-    Args:
-        name: Logger name to retrieve
-        
-    Returns:
-        Logger instance if it exists, None otherwise
-        
-    Example:
-        >>> logger = get_logger('src.data.market_data')
-        >>> if logger:
-        ...     logger.info("Using existing logger")
-    """
-    logger = logging.getLogger(name)
-    return logger if logger.handlers else None

@@ -37,7 +37,6 @@ class AnalysisParams:
     theme: str
     colormap: str
     y_axis_type: str
-    show_slices: bool = True
     surface_method: str = 'Interpolated'
 
     @property
@@ -48,22 +47,6 @@ class AnalysisParams:
     def dividend_override(self) -> Optional[float]:
         """The dividend yield to use instead of the looked-up one, as a decimal, or None."""
         return self.dividend_yield / 100 if self.override_dividend else None
-
-
-def fetch_options(params: AnalysisParams) -> pd.DataFrame:
-    """Fetch calls and puts that pass the quote filters; raise AnalysisError if there are none."""
-    fetcher = OptionDataFetcher(params.ticker)
-    options_df = fetcher.prepare_for_iv(
-        min_strike_pct=params.min_strike_pct,
-        max_strike_pct=params.max_strike_pct,
-        min_open_interest=int(params.min_open_interest),
-        risk_free_rate=params.risk_free_decimal
-    )
-    
-    if options_df.empty:
-        raise AnalysisError("No valid options data found.")
-    
-    return options_df
 
 
 def fetch_full_chain(ticker: str) -> pd.DataFrame:
@@ -174,8 +157,8 @@ def fit_surface_svi(valid_options: List[Any], ivs: List[float], spot_price: floa
 
 
 def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price: float,
-                         params: AnalysisParams, svi: Optional[Dict[str, Any]] = None) -> Tuple[go.Figure, List[int]]:
-    """Build the 3D surface with smile slices; also return the slices that could not be drawn."""
+                         params: AnalysisParams, svi: Optional[Dict[str, Any]] = None) -> go.Figure:
+    """Build the 3D implied volatility surface."""
     strikes = np.array([_axis_value(opt, params.y_axis_type) for opt in valid_options])
     
     surface_data = SurfaceData(
@@ -194,11 +177,8 @@ def build_surface_figure(valid_options: List[Any], ivs: List[float], spot_price:
     
     plotter = SurfacePlotter(surface_data, mesh)
     # Pass ticker to create_surface_plot
-    fig = plotter.create_surface_plot(theme=params.theme.lower(), colormap=params.colormap,
-                                      ticker=params.ticker)
-    if params.show_slices:
-        fig = plotter.add_smile_slices(fig, theme=params.theme.lower())
-    return fig, list(plotter.skipped_slice_days)
+    return plotter.create_surface_plot(theme=params.theme.lower(), colormap=params.colormap,
+                                       ticker=params.ticker)
 
 
 AXIS_STRIKE = "Strike Price ($)"
@@ -542,7 +522,7 @@ def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Option
         raise AnalysisError(f"Insufficient valid options for analysis. Found only {len(ivs)} valid IVs.")
     
     svi = fit_surface_svi(valid_options, ivs, spot_price) if params.surface_method == "SVI fit" else None
-    fig, skipped_slice_days = build_surface_figure(valid_options, ivs, spot_price, params, svi)
+    fig = build_surface_figure(valid_options, ivs, spot_price, params, svi)
     
     results = {
         'fig': fig,
@@ -552,19 +532,9 @@ def analyse_chain(chain: pd.DataFrame, params: AnalysisParams, on_status: Option
         'valid_options': valid_options,
         'dividend_yield_used': used_dividend,
         'dividend_source': dividend_source,
-        'skipped_slice_days': skipped_slice_days,
         'n_puts': sum(1 for opt in valid_options if opt['type'] == 'put'),
         'n_calls': sum(1 for opt in valid_options if opt['type'] == 'call')
     }
     if svi is not None:
         results['svi'] = svi
     return results
-
-
-def run_analysis(params: AnalysisParams, on_status: Optional[StatusCallback] = None,
-                 on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
-    """Fetch the chain for the chosen ticker and analyse it."""
-    if on_status is not None:
-        on_status('info', "Fetching market data...")
-    
-    return analyse_chain(fetch_options(params), params, on_status, on_progress)

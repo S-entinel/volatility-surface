@@ -90,14 +90,11 @@ class IVCalculator:
     Features:
     - Input validation for all parameters
     - No-arbitrage bound checking (discounted lower and upper bounds)
-    - Statistics tracking for monitoring calculation success rates
     - Detailed error logging for debugging
     """
     
     def __init__(self):
-        """Initialize calculator with statistics tracking."""
-        self.calculation_count = 0
-        self.failed_count = 0
+        """Initialize the calculator."""
         logger.info("IVCalculator initialized")
     
     def calculate_iv(self, 
@@ -125,15 +122,11 @@ class IVCalculator:
             
         Notes:
             - Returns None for invalid inputs or convergence failures
-            - Tracks success/failure statistics internally
         """
-        self.calculation_count += 1
-        
         # Validate inputs
         validation_error = self._validate_inputs(S, K, T, r, market_price, q, option_type)
         if validation_error:
             logger.debug(f"Input validation failed: {validation_error}")
-            self.failed_count += 1
             return None
         
         # Normalize option type
@@ -145,12 +138,10 @@ class IVCalculator:
 
         if market_price < lower_bound * tolerance:
             logger.debug(f"Market price ({market_price:.4f}) below no-arbitrage lower bound ({lower_bound:.4f})")
-            self.failed_count += 1
             return None
 
         if market_price >= upper_bound:
             logger.debug(f"Market price ({market_price:.4f}) at or above no-arbitrage upper bound ({upper_bound:.4f})")
-            self.failed_count += 1
             return None
 
         def objective_function(sigma):
@@ -173,14 +164,12 @@ class IVCalculator:
             # Bracketing error - function doesn't cross zero in interval
             logger.debug(f"Brent's method bracketing error: {str(e)} "
                         f"(S={S:.2f}, K={K:.2f}, T={T:.4f}, price={market_price:.4f})")
-            self.failed_count += 1
             return None
             
         except RuntimeError as e:
             # Convergence failure
             logger.debug(f"Brent's method convergence error: {str(e)} "
                         f"(S={S:.2f}, K={K:.2f}, T={T:.4f}, price={market_price:.4f})")
-            self.failed_count += 1
             return None
     
     def _validate_inputs(self,
@@ -221,32 +210,3 @@ class IVCalculator:
             return f"Option type must be 'call' or 'put' (got '{option_type}')"
         
         return None
-    
-    def get_statistics(self) -> dict:
-        """
-        Get calculation statistics.
-        
-        Returns:
-            Dictionary with calculation metrics:
-            - total: Total calculations attempted
-            - successful: Number of successful calculations
-            - failed: Number of failed calculations
-            - success_rate: Percentage of successful calculations
-        """
-        success_rate = 0.0
-        if self.calculation_count > 0:
-            success_rate = ((self.calculation_count - self.failed_count) / 
-                          self.calculation_count * 100)
-        
-        return {
-            'total': self.calculation_count,
-            'successful': self.calculation_count - self.failed_count,
-            'failed': self.failed_count,
-            'success_rate': success_rate
-        }
-    
-    def reset_statistics(self) -> None:
-        """Reset calculation statistics to zero."""
-        self.calculation_count = 0
-        self.failed_count = 0
-        logger.info("Statistics reset")
