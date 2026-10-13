@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Tuple, Dict, Any
 from src.analysis import (
     AnalysisError, AnalysisParams, analyse_chain, build_heatmap_figure, build_smile_figure, expiry_labels,
-    fetch_full_chain, figure_html, smile_stats
+    fetch_full_chain, figure_html, smile_fit, smile_stats
 )
 from src.config.config import (
     UIConfig, 
@@ -241,9 +241,15 @@ def render_smile_tab(results: Dict[str, Any], y_axis_type: str) -> None:
     
     stats = smile_stats(results, chosen)
     skew = f"{stats['iv_skew']:.1f}%" if stats['iv_skew'] is not None else "N/A"
+    fit = smile_fit(results, chosen)
+    fit_text = ""
+    if fit is not None:
+        fit_text = f" The white line is an SVI fit, off by {fit.rmse * 100:.2f} vol points on average."
+        if not fit.butterfly_ok:
+            fit_text += " It allows butterfly arbitrage."
     st.caption(
         f"At this expiry: ATM IV {stats['atm_iv']:.1f}% · skew {skew} (out-of-the-money put minus call). "
-        f"Open circles are last traded prices, not live quotes."
+        f"Open circles are last traded prices, not live quotes.{fit_text}"
     )
     st.plotly_chart(build_smile_figure(results, chosen, y_axis_type), use_container_width=True)
 

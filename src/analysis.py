@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from src.data.market_data import OptionDataFetcher
 from src.data.option_selection import select_otm_options
-from src.svi import calendar_check, fit_slice, surface_iv, total_variance
+from src.svi import SviSlice, calendar_check, fit_slice, surface_iv, total_variance
 from src.calculators.implied_volatility import IVCalculator
 from src.visualization.surface_plot import SurfacePlotter, SurfaceData
 from src.config.config import MarketDataConfig, ModelConfig, StatisticsConfig, UIConfig
@@ -313,6 +313,21 @@ def smile_stats(results: Dict[str, Any], expiry_days: int) -> Dict[str, Any]:
     return calculate_iv_statistics(options, ivs, results['spot_price'])
 
 
+def smile_fit(results: Dict[str, Any], expiry_days: int) -> Optional[SviSlice]:
+    """The SVI fit for one expiry: the surface fit if there is one, otherwise fitted now for this expiry only."""
+    existing = next((s for s in (results.get('svi') or {}).get('slices', []) if s.days == expiry_days), None)
+    if existing is not None:
+        return existing
+    options, ivs = _expiry_points(results, expiry_days)
+    if not options or 'forward' not in options[0]:
+        return None
+    forward = float(options[0]['forward'])
+    return fit_slice(
+        k=np.log(np.array([float(opt['strike']) for opt in options]) / forward), iv=np.array(ivs),
+        maturity=float(options[0]['T']), days=expiry_days, forward=forward
+    )
+
+
 def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: str) -> go.Figure:
     """Implied volatility against strike for one expiry, with puts and calls in different colours."""
     options, ivs = _expiry_points(results, expiry_days)
@@ -352,7 +367,7 @@ def build_smile_figure(results: Dict[str, Any], expiry_days: int, y_axis_type: s
                 )
             ))
     
-    fit = next((sl for sl in (results.get('svi') or {}).get('slices', []) if sl.days == expiry_days), None)
+    fit = smile_fit(results, expiry_days)
     if fit is not None:
         k = np.linspace(fit.k_min, fit.k_max, 120)
         strikes = fit.forward * np.exp(k)

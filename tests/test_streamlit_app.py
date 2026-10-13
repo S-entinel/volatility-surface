@@ -198,6 +198,13 @@ class TestSmileTab:
         assert widget(at.selectbox, "Expiry").value == 45
 
     @pytest.mark.integration
+    def test_the_svi_fit_is_shown_even_when_the_surface_is_interpolated(self):
+        at, _ = open_app(make_chain())
+
+        assert widget(at.radio, "Surface method").value == "Interpolated"
+        assert any("The white line is an SVI fit" in c.value for c in at.caption)
+
+    @pytest.mark.integration
     def test_another_expiry_can_be_picked(self):
         at, _ = open_app(make_chain(), [lambda a: widget(a.selectbox, "Expiry").set_value(90).run()])
 
