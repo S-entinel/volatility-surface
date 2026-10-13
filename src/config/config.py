@@ -1,5 +1,5 @@
 """
-Central configuration for Volatility Surface Analyser.
+Central configuration for Implied Volatility Surface Explorer.
 
 All magic numbers, default values, and thresholds are defined here
 for easy maintenance and modification.
@@ -115,4 +115,4 @@ class UIConfig:
     AVAILABLE_Y_AXIS_TYPES: List[str] = ["Strike Price ($)", "Moneyness"]
     
     # Cache settings
-    CACHE_TTL_SECONDS: int = 300  # 5 minutes
+    CACHE_TTL_SECONDS: int = 900  # 15 minutes

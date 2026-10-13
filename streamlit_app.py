@@ -1,4 +1,4 @@
-"""Streamlit user interface for the implied volatility surface analyser."""
+"""Streamlit user interface for the implied volatility surface explorer."""
 
 import streamlit as st
 import numpy as np
